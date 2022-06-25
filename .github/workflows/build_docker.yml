@@ -22,7 +22,7 @@ jobs:
           images: |
             BIBOLV/wmbusmeters
           tags: |
-            type=ref,event=tag
+            type=semver,pattern={{raw}}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
