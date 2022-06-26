@@ -1,7 +1,6 @@
 
 # wmbusmeters
 
-
 The program receives and decodes C1,T1 or S1 telegrams
 (using the wireless mbus protocol or the wired mbus protocol) to acquire
 utility meter readings. The readings can then be published using
