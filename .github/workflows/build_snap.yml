@@ -10,13 +10,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+        - amd64
+        - armhf
+        - arm64
     steps:
     - uses: actions/checkout@v2
-    - uses: snapcore/action-build@v1
-      id: build
-    - uses: snapcore/action-publish@v1
-      env:
-        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.STORE_LOGIN }}
+    - uses: docker/setup-qemu-action@v1
+    - uses: diddlesnaps/snapcraft-multiarch-action@v1
       with:
-        snap: ${{ steps.build.outputs.snap }}
-        release: edge
+        architecture: ${{ matrix.platform }}
