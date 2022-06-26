@@ -1,4 +1,4 @@
-name: wmbusmeters
+name: wmbusmeters-test
 adopt-info: wmbusmeters
 summary: "Program receives and decodes WMBus telegrams"
 description: |
@@ -10,7 +10,7 @@ description: |
   to allow snap read USB devices and check that root user of your system is
   added to group that can read USB devices
 
-base: core18
+base: core20
 confinement: strict
 
 architectures:
