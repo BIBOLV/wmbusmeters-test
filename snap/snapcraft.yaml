@@ -10,7 +10,7 @@ description: |
   to allow snap read USB devices and check that root user of your system is
   added to group that can read USB devices
 
-base: core20
+base: core18
 confinement: strict
 
 architectures:
