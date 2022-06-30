@@ -8,46 +8,43 @@ on:
       - '*.*.*'
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform:
+        architecture:
         - amd64
+        - i386
         - armhf
         - arm64
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: BIBOLV/wmbusmeters
-          tags: type=ref,event=tag
-      - id: build
-        run: |
-          docker run --rm --tty \
-            --security-opt apparmor:unconfined \
-            --cap-add SYS_ADMIN \
-            multiarch/qemu-user-static --reset -p yes
-
-          docker run --rm --tty \
-            --security-opt apparmor:unconfined \
-            --cap-add SYS_ADMIN \
-            --device /dev/fuse \
-            --volume /sys \
-            --volume /sys/fs/cgroup:/sys/fs/cgroup:ro \
-            --volume $GITHUB_WORKSPACE:$GITHUB_WORKSPACE \
-            --workdir $GITHUB_WORKSPACE \
-            --platform "${{ matrix.architecture }}" \
-            --env PLAYTEST="${{ matrix.playtest }}" \
-            diddledan/snapcraft:core18
-
-          echo ::set-output name=snap::$(find $GITHUB_WORKSPACE -maxdepth 1 -type f -name "*.snap" | head -n1)
-
-      - uses: snapcore/action-publish@v1
-        with:
-          store_login: ${{ secrets.STORE_LOGIN }}
-          snap: ${{ steps.build.outputs.snap }}
-          release: beta
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+    -
+      name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: BIBOLV/wmbusmeters
+        tags: type=ref,event=tag
+    - name: Build
+      id: build
+      uses: diddlesnaps/snapcraft-multiarch-action@v1
+      with:
+        architecture: ${{ matrix.architecture }}
+    - name: Publish release to Stable
+      uses: snapcore/action-publish@v1
+      if: ${{ steps.meta.outputs.tags }}
+      with:
+        store_login: ${{ secrets.STORE_LOGIN }}
+        snap: ${{ steps.build.outputs.snap }}
+        release: stable
+    - name: Publish latest to Edge
+      uses: snapcore/action-publish@v1
+      if: ${{ !steps.meta.outputs.tags }}
+      with:
+        store_login: ${{ secrets.STORE_LOGIN }}
+        snap: ${{ steps.build.outputs.snap }}
+        release: edge
