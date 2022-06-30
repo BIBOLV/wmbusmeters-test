@@ -84,7 +84,7 @@ parts:
       - usr/bin/rtl_433
 
 apps:
-  wmbusmeters:
+  wmbusmetersd:
     command: bin/sh $SNAP/launcher.sh
     daemon: simple
     restart-condition: always
@@ -93,6 +93,19 @@ apps:
       - network-bind
       - raw-usb
       - system-observe
+
+  wmbusmeters:
+    command: wmbusmeters
+    environment:
+      LD_LIBRARY_PATH: $LD_LIBRARY_PATH:$SNAP/usr/lib
+      PATH: $SNAP/usr/bin:$PATH
+
+  wmbusmeters-admin:
+    command: wmbusmeters-admin
+    environment:
+      LD_LIBRARY_PATH: $LD_LIBRARY_PATH:$SNAP/usr/lib
+      PATH: $SNAP/usr/bin:$PATH
+
 
 layout:
   /usr/bin/wmbusmeters:
