@@ -4,7 +4,7 @@ rm -f "$ROOT"/usr/bin/wmbusmeters "$ROOT"/usr/sbin/wmbusmetersd "$ROOT"/usr/sbin
 mkdir -p "$ROOT"/usr/bin
 mkdir -p "$ROOT"/usr/sbin
 cp "$SRC" "$ROOT"/usr/bin/wmbusmeters
-cp "$SRC" "$ROOT"/usr/bin/wmbusmeters-admin
+cp "$SRC"-admin "$ROOT"/usr/bin/wmbusmeters-admin
 (cd "$ROOT"/usr/sbin; ln -s ../bin/wmbusmeters wmbusmetersd)
 
 echo "binaries: installed $ROOT/usr/bin/wmbusmeters and $ROOT/usr/sbin/wmbusmetersd"
