@@ -27,7 +27,7 @@
         "logtelegrams": false,
         "format": "json",
         "logfile": "/dev/stdout",
-        "shell": "/wmbusmeters/mosquitto_pub.sh wmbusmeters/$METER_NAME \"$METER_JSON\""
+        "shell": "/wmbusmeters/mosquitto_pub.sh wmbusmeters/$METER_NAME \"$METER_JSON\"",
         "meters": [],
         "mqtt": {}
     },
