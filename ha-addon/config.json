@@ -1,6 +1,6 @@
 {
     "name": "Wmbusmeters (W-MBus to MQTT)",
-    "version": "0.2.31",
+    "version": "0.2.32",
     "slug": "wmbusmeters",
     "description": "Acquire utility meter readings using the wireless mbus protocol (WMBUS)",
     "arch": ["armv7", "aarch64", "amd64"],
@@ -24,8 +24,11 @@
         "donotprobe": "/dev/ttyAMA0",
         "loglevel": "normal",
         "logtelegrams": "false",
+        "format": "json",
         "enable_mqtt_discovery": "false",
-        "meters": []
+        "meters": [],
+        "data_path": "/config/wmbusmeters",
+        "logfile": "/dev/stdout"
     },
     "schema": {
         "device": "str",
