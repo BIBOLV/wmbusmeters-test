@@ -41,9 +41,11 @@ do
             echo OK json: $TESTNAME
             TESTRESULT="OK"
         else
-            jq --sort-keys . $TEST/test_expected_json.txt
-            jq --sort-keys . $TEST/test_response_json.txt
             TESTRESULT="ERROR"
+            if [ "$USE_MELD" = "true" ]
+            then
+                meld $TEST/test_expected_json.txt $TEST/test_response_json.txt
+            fi
         fi
     else
         echo "wmbusmeters returned error code: $?"

@@ -8,9 +8,9 @@ TEST=testoutput
 TESTNAME="Test list-envs and list-fields"
 TESTRESULT="ERROR"
 
-$PROG --listenvs=amiplus > $TEST/test_output.txt 2>&1
+$PROG --listenvs=amiplus | sort > $TEST/test_output.txt 2>&1
 
-cat <<EOF > $TEST/test_expected.txt
+cat <<EOF | sort > $TEST/test_expected.txt
 METER_JSON
 METER_ID
 METER_NAME
@@ -21,6 +21,7 @@ METER_TIMESTAMP_UTC
 METER_TIMESTAMP_UT
 METER_TIMESTAMP_LT
 METER_DEVICE
+METER_DEVICE_DATE_TIME
 METER_RSSI_DBM
 METER_TOTAL_ENERGY_CONSUMPTION_KWH
 METER_CURRENT_POWER_CONSUMPTION_KW
@@ -29,7 +30,6 @@ METER_CURRENT_POWER_PRODUCTION_KW
 METER_VOLTAGE_AT_PHASE_1_Volt
 METER_VOLTAGE_AT_PHASE_2_Volt
 METER_VOLTAGE_AT_PHASE_3_Volt
-METER_DEVICE_DATE_TIME
 METER_TOTAL_ENERGY_CONSUMPTION_TARIFF_1_KWH
 METER_TOTAL_ENERGY_CONSUMPTION_TARIFF_2_KWH
 METER_TOTAL_ENERGY_CONSUMPTION_TARIFF_3_KWH
@@ -45,6 +45,11 @@ then
     then
         echo OK: $TESTNAME
         TESTRESULT="OK"
+    else
+        if [ "$USE_MELD" = "true" ]
+        then
+            meld $TEST/test_expected.txt $TEST/test_output.txt
+        fi
     fi
 fi
 
@@ -54,9 +59,9 @@ then
     exit 1
 fi
 
-$PROG --listfields=amiplus > $TEST/test_output.txt 2>&1
+$PROG --listfields=amiplus | sort > $TEST/test_output.txt 2>&1
 
-cat <<EOF > $TEST/test_expected.txt
+cat <<EOF | sort > $TEST/test_expected.txt
                                    id  The meter id number.
                                  name  Your name for the meter.
                                 media  What does the meter measure?
@@ -90,6 +95,11 @@ then
     then
         echo OK: $TESTNAME
         TESTRESULT="OK"
+    else
+        if [ "$USE_MELD" = "true" ]
+        then
+            meld $TEST/test_expected.txt $TEST/test_output.txt
+        fi
     fi
 fi
 

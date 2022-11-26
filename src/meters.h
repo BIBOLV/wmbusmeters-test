@@ -61,11 +61,7 @@ LIST_OF_METER_TYPES
 #define LIST_OF_METERS \
     X(auto,       0,      AutoMeter, AUTO, Auto) \
     X(unknown,    0,      UnknownMeter, UNKNOWN, Unknown) \
-    X(eurisii,    T1_bit, HeatCostAllocationMeter, EURISII, EurisII)   \
-    X(evo868,     T1_bit, WaterMeter,       EVO868,      EVO868)       \
     X(gransystems,T1_bit, ElectricityMeter, CCx01, CCx01) 		       \
-    X(hydrocalm3, T1_bit, HeatMeter,        HYDROCALM3,  HydrocalM3)   \
-    X(hydrodigit, T1_bit, WaterMeter,       HYDRODIGIT,  Hydrodigit)   \
     X(multical302,C1_bit|T1_bit, HeatMeter,        MULTICAL302, Multical302)  \
     X(multical403,C1_bit, HeatMeter,        MULTICAL403, Multical403)  \
     X(multical602,C1_bit, HeatMeter,        MULTICAL602, Multical602)  \
@@ -147,7 +143,6 @@ struct MeterInfo
     vector<string> shells;
     vector<string> extra_constant_fields; // Additional static fields that are added to each message.
     vector<string> extra_calculated_fields; // Additional field calculated using formulas.
-    vector<Unit> conversions; // Additional units desired in json.
     vector<string> selected_fields; // Usually set to the default fields, but can be override in meter config.
 
     // If this is a meter that needs to be polled.
@@ -305,6 +300,7 @@ struct PrintProperties
 
 struct FieldInfo
 {
+    ~FieldInfo();
     FieldInfo(int index,
               string vname,
               Quantity xuantity,
@@ -350,13 +346,14 @@ struct FieldInfo
     void performCalculation(Meter *m);
 
     string renderJsonOnlyDefaultUnit(Meter *m);
-    string renderJson(Meter *m, vector<Unit> *additional_conversions);
+    string renderJson(Meter *m, DVEntry *dve);
     string renderJsonText(Meter *m);
     // Render the field name based on the actual field from the telegram.
     // A FieldInfo can be declared to handle any number of storage fields of a certain range.
     // The vname is then a pattern total_at_month_{storage_counter} that gets translated into
     // total_at_month_2 (for the dventry with storage nr 2.)
-    string generateFieldName(DVEntry *dve);
+    string generateFieldNameWithUnit(DVEntry *dve);
+    string generateFieldNameNoUnit(DVEntry *dve);
     // Check if the meter object stores a value for this field.
     bool hasValue(Meter *m);
 
@@ -386,13 +383,13 @@ private:
     Translate::Lookup lookup_;
 
     // For calculated fields.
-    unique_ptr<Formula> formula_;
+    shared_ptr<Formula> formula_;
 
     // For the generated field name.
-    unique_ptr<StringInterpolator> field_name_;
+    shared_ptr<StringInterpolator> field_name_;
 
     // If the field name template could not be parsed.
-    bool valid_field_name_;
+    bool valid_field_name_ {};
 };
 
 struct BusManager;
@@ -411,6 +408,7 @@ struct Meter
     virtual string idsc() = 0;
     // This meter can report these fields, like total_m3, temp_c.
     virtual vector<FieldInfo> &fieldInfos() = 0;
+    virtual vector<string> &extraConstantFields() = 0;
     // Either the default fields specified in the driver, or override fields in the meter configuration file.
     virtual vector<string> &selectedFields() = 0;
     virtual void setSelectedFields(vector<string> &f) = 0;
@@ -427,7 +425,9 @@ struct Meter
     virtual time_t pollInterval() = 0;
     virtual bool usesPolling() = 0;
 
-    virtual void setNumericValue(FieldInfo *fi, Unit u, double v) = 0;
+    virtual void setNumericValue(string vname, Unit u, double v) = 0;
+    virtual void setNumericValue(FieldInfo *fi, DVEntry *dve, Unit u, double v) = 0;
+    virtual double getNumericValue(string vname, Unit u) = 0;
     virtual double getNumericValue(FieldInfo *fi, Unit u) = 0;
     virtual void setStringValue(FieldInfo *fi, std::string v) = 0;
     virtual std::string getStringValue(FieldInfo *fi) = 0;
@@ -452,15 +452,15 @@ struct Meter
                                 bool simulated, string *id, bool *id_match, Telegram *out_t = NULL) = 0;
     virtual MeterKeys *meterKeys() = 0;
 
-    virtual void addConversions(std::vector<Unit> cs) = 0;
     virtual void addExtraCalculatedField(std::string ecf) = 0;
-    virtual vector<Unit>& conversions() = 0;
     virtual void addShell(std::string cmdline) = 0;
     virtual vector<string> &shellCmdlines() = 0;
     virtual void poll(shared_ptr<BusManager> bus) = 0;
 
     virtual FieldInfo *findFieldInfo(string vname, Quantity xuantity) = 0;
     virtual string renderJsonOnlyDefaultUnit(string vname, Quantity xuantity) = 0;
+
+    virtual string debugValues() = 0;
 
     virtual ~Meter() = default;
 };

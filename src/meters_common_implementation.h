@@ -60,6 +60,7 @@ struct MeterCommonImplementation : public virtual Meter
     vector<string>& ids();
     string idsc();
     vector<FieldInfo> &fieldInfos();
+    vector<string> &extraConstantFields();
     string name();
     MeterDriver driver();
     DriverName driverName();
@@ -94,8 +95,6 @@ protected:
     void triggerUpdate(Telegram *t);
     void setExpectedELLSecurityMode(ELLSecurityMode dsm);
     void setExpectedTPLSecurityMode(TPLSecurityMode tsm);
-    void addConversions(std::vector<Unit> cs);
-    std::vector<Unit>& conversions() { return conversions_; }
     void addShell(std::string cmdline);
     void addExtraConstantField(std::string ecf);
     std::vector<std::string> &shellCmdlines();
@@ -159,6 +158,15 @@ protected:
         string formula,         // The formula can reference the other fields and + them together.
         Unit use_unit = Unit::Unknown); // If specified use this unit for the json field instead instead of the default unit.
 
+    void addNumericFieldWithCalculatorAndMatcher(
+        string vname,           // Name of value without unit, eg "total" "total_month{storagenr}"
+        string help,            // Information about this field.
+        PrintProperties print_properties, // Should this be printed by default in fields,json and hr.
+        Quantity vquantity,     // Value belongs to this quantity, this quantity determines the default unit.
+        string formula,         // The formula can reference the other fields and + them together.
+        FieldMatcher matcher,   // We can generate a calculated field per match.
+        Unit use_unit = Unit::Unknown); // If specified use this unit for the json field instead instead of the default unit.
+
     void addNumericField(
         string vname,          // Name of value without unit, eg total
         Quantity vquantity,    // Value belongs to this quantity.
@@ -166,6 +174,13 @@ protected:
         string help,
         function<void(Unit,double)> setValueFunc, // Use the SET macro above.
         function<double(Unit)> getValueFunc); // Use the GET macro above.
+
+    void addNumericField(
+        string vname,          // Name of value without unit, eg total
+        Quantity vquantity,    // Value belongs to this quantity.
+        PrintProperties print_properties, // Should this be printed by default in fields,json and hr.
+        string help,
+        Unit use_unit = Unit::Unknown);  // If specified use this unit for the json field instead instead of the default unit.
 
 #define SET_STRING_FUNC(varname) {[=](string s){varname = s;}}
 #define GET_STRING_FUNC(varname) {[=](){return varname; }}
@@ -231,20 +246,22 @@ protected:
                     vector<string> *more_json, // Add this json "key"="value" strings.
                     vector<string> *selected_fields, // Only print these fields.
                     bool pretty_print); // Insert newlines and indentation.
-    // Json fields cannot be modified expect by adding conversions.
     // Json fields include all values except timestamp_ut, timestamp_utc, timestamp_lt
     // since Json is assumed to be decoded by a program and the current timestamp which is the
     // same as timestamp_utc, can always be decoded/recoded into local time or a unix timestamp.
 
     FieldInfo *findFieldInfo(string vname, Quantity xuantity);
     string renderJsonOnlyDefaultUnit(string vname, Quantity xuantity);
+    string debugValues();
 
     void processFieldExtractors(Telegram *t);
     void processFieldCalculators();
 
     virtual void processContent(Telegram *t);
 
-    void setNumericValue(FieldInfo *fi, Unit u, double v);
+    void setNumericValue(string vname, Unit u, double v);
+    void setNumericValue(FieldInfo *fi, DVEntry *dve, Unit u, double v);
+    double getNumericValue(string vname, Unit u);
     double getNumericValue(FieldInfo *fi, Unit u);
     void setStringValue(FieldInfo *fi, std::string v);
     std::string getStringValue(FieldInfo *fi);
@@ -290,7 +307,6 @@ private:
 
 protected:
 
-    vector<Unit> conversions_;
     vector<FieldInfo> field_infos_;
     vector<string> field_names_;
     // Defaults to a setting specified in the driver. Can be overridden in the meter file.

@@ -236,6 +236,8 @@ private:
     int nr_;
 };
 
+Unit toDefaultUnit(Vif v);
+
 enum class DVEntryCounterType
 {
     UNKNOWN,
@@ -282,6 +284,7 @@ struct SubUnitNr
     SubUnitNr(int n) : nr_(n) {}
     int intValue() { return nr_; }
     bool operator==(SubUnitNr s) { return nr_ == s.nr_; }
+    bool operator!=(SubUnitNr s) { return nr_ != s.nr_; }
     bool operator>=(SubUnitNr s) { return nr_ >= s.nr_; }
     bool operator<=(SubUnitNr s) { return nr_ <= s.nr_; }
 
@@ -406,6 +409,7 @@ struct FieldMatcher
     FieldMatcher() : active(false) { }
     FieldMatcher(bool act) : active(act) { }
     static FieldMatcher build() { return FieldMatcher(true); }
+    static FieldMatcher noMatcher() { return FieldMatcher(false); }
     FieldMatcher &set(DifVifKey k) {
         dif_vif_key = k;
         match_dif_vif_key = (k.str() != ""); return *this; }
@@ -450,6 +454,16 @@ struct FieldMatcher
     FieldMatcher &set(IndexNr i) { index_nr = i; return *this; }
 
     bool matches(DVEntry &dv_entry);
+
+    // Returns true of there is any range for storage, tariff, subunit nrs.
+    // I.e. this matcher is expected to match against multiple dv entries!
+    bool expectedToMatchAgainstMultipleEntries()
+    {
+        return (match_storage_nr && storage_nr_from != storage_nr_to)
+            || (match_tariff_nr && tariff_nr_from != tariff_nr_to)
+            || (match_subunit_nr && subunit_nr_from != subunit_nr_to);
+    }
+
     std::string str();
 };
 

@@ -164,567 +164,6 @@ bool lookupDriverInfo(const string& driver, DriverInfo *out_di)
     return true;
 }
 
-struct MeterManagerImplementation : public virtual MeterManager
-{
-private:
-    bool is_daemon_ {};
-    bool should_analyze_ {};
-    OutputFormat analyze_format_ {};
-    string analyze_driver_;
-    string analyze_key_;
-    bool analyze_verbose_;
-    vector<MeterInfo> meter_templates_;
-    vector<shared_ptr<Meter>> meters_;
-    vector<function<bool(AboutTelegram&,vector<uchar>)>> telegram_listeners_;
-    function<void(Telegram*t,Meter*)> on_meter_updated_;
-
-public:
-    void addMeterTemplate(MeterInfo &mi)
-    {
-        meter_templates_.push_back(mi);
-    }
-
-    void addMeter(shared_ptr<Meter> meter)
-    {
-        meters_.push_back(meter);
-        meter->setIndex(meters_.size());
-        meter->onUpdate(on_meter_updated_);
-    }
-
-    Meter *lastAddedMeter()
-    {
-        return meters_.back().get();
-    }
-
-    void removeAllMeters()
-    {
-        meters_.clear();
-    }
-
-    void forEachMeter(std::function<void(Meter*)> cb)
-    {
-        for (auto &meter : meters_)
-        {
-            cb(meter.get());
-        }
-    }
-
-    bool hasAllMetersReceivedATelegram()
-    {
-        if (meters_.size() < meter_templates_.size()) return false;
-
-        for (auto &meter : meters_)
-        {
-            if (meter->numUpdates() == 0) return false;
-        }
-
-        return true;
-    }
-
-    bool hasMeters()
-    {
-        return meters_.size() != 0 || meter_templates_.size() != 0;
-    }
-
-    void warnForUnknownDriver(string name, Telegram *t)
-    {
-        int mfct = t->dll_mfct;
-        int media = t->dll_type;
-        int version = t->dll_version;
-        uchar *id_b = t->dll_id_b;
-
-        if (t->tpl_id_found)
-        {
-            mfct = t->tpl_mfct;
-            media = t->tpl_type;
-            version = t->tpl_version;
-            id_b = t->tpl_id_b;
-        }
-
-        warning("(meter) %s: meter detection could not find driver for "
-                "id: %02x%02x%02x%02x mfct: (%s) %s (0x%02x) type: %s (0x%02x) ver: 0x%02x\n",
-                name.c_str(),
-                id_b[3], id_b[2], id_b[1], id_b[0],
-                manufacturerFlag(mfct).c_str(),
-                manufacturer(mfct).c_str(),
-                mfct,
-                mediaType(media, mfct).c_str(), media,
-                version);
-
-
-        warning("(meter) please consider opening an issue at https://github.com/weetmuts/wmbusmeters/\n");
-        warning("(meter) to add support for this unknown mfct,media,version combination\n");
-    }
-
-    bool handleTelegram(AboutTelegram &about, vector<uchar> input_frame, bool simulated)
-    {
-        if (should_analyze_)
-        {
-            analyzeTelegram(about, input_frame, simulated);
-            return true;
-        }
-
-        bool handled = false;
-        bool exact_id_match = false;
-
-        string ids;
-        for (auto &m : meters_)
-        {
-            bool h = m->handleTelegram(about, input_frame, simulated, &ids, &exact_id_match);
-            if (h) handled = true;
-        }
-
-        // If not properly handled, and there was no exact id match.
-        // then lets check if there is a template that can create a meter for it.
-        if (!handled && !exact_id_match)
-        {
-            debug("(meter) no meter handled %s checking %d templates.\n", ids.c_str(), meter_templates_.size());
-            // Not handled, maybe we have a template to create a new meter instance for this telegram?
-            Telegram t;
-            t.about = about;
-            bool ok = t.parseHeader(input_frame);
-            if (simulated) t.markAsSimulated();
-
-            if (ok)
-            {
-                ids = t.idsc;
-                for (auto &mi : meter_templates_)
-                {
-                    if (MeterCommonImplementation::isTelegramForMeter(&t, NULL, &mi))
-                    {
-                        // We found a match, make a copy of the meter info.
-                        MeterInfo meter_info = mi;
-                        // Overwrite the wildcard pattern with the highest level id.
-                        // The last id in the t.ids is the highest level id.
-                        // For example: a telegram can have dll_id,tpl_id
-                        // This will pick the tpl_id.
-                        // Or a telegram can have a single dll_id,
-                        // then the dll_id will be picked.
-                        vector<string> tmp_ids;
-                        tmp_ids.push_back(t.ids.back());
-                        meter_info.ids = tmp_ids;
-                        meter_info.idsc = t.ids.back();
-
-                        if (meter_info.driver == MeterDriver::AUTO)
-                        {
-                            // Look up the proper meter driver!
-                            DriverInfo di = pickMeterDriver(&t);
-                            if (di.driver() == MeterDriver::UNKNOWN && di.name().str() == "")
-                            {
-                                if (should_analyze_ == false)
-                                {
-                                    // We are not analyzing, so warn here.
-                                    warnForUnknownDriver(mi.name, &t);
-                                }
-                            }
-                            else
-                            {
-                                meter_info.driver = di.driver();
-                                meter_info.driver_name = di.name();
-                            }
-                        }
-                        // Now build a meter object with for this exact id.
-                        auto meter = createMeter(&meter_info);
-                        addMeter(meter);
-                        string idsc = toIdsCommaSeparated(t.ids);
-                        verbose("(meter) used meter template %s %s %s to match %s\n",
-                                mi.name.c_str(),
-                                mi.idsc.c_str(),
-                                toString(mi.driver).c_str(),
-                                idsc.c_str());
-
-                        if (is_daemon_)
-                        {
-                            notice("(wmbusmeters) started meter %d (%s %s %s)\n",
-                                   meter->index(),
-                                   mi.name.c_str(),
-                                   meter_info.idsc.c_str(),
-                                   toString(mi.driver).c_str());
-                        }
-                        else
-                        {
-                            verbose("(meter) started meter %d (%s %s %s)\n",
-                                   meter->index(),
-                                   mi.name.c_str(),
-                                   meter_info.idsc.c_str(),
-                                   toString(mi.driver).c_str());
-                        }
-
-                        bool match = false;
-                        bool h = meter->handleTelegram(about, input_frame, simulated, &ids, &match);
-                        if (!match)
-                        {
-                            // Oups, we added a new meter object tailored for this telegram
-                            // but it still did not match! This is probably an error in wmbusmeters!
-                            warning("(meter) newly created meter (%s %s %s) did not match telegram! ",
-                                    "Please open an issue at https://github.com/weetmuts/wmbusmeters/\n",
-                                    meter->name().c_str(), meter->idsc().c_str(), meter->driverName().str().c_str());
-                        }
-                        else if (!h)
-                        {
-                            // Oups, we added a new meter object tailored for this telegram
-                            // but it still did not handle it! This can happen if the wrong
-                            // decryption key was used.
-                            warning("(meter) newly created meter (%s %s %s) did not handle telegram!\n",
-                                    meter->name().c_str(), meter->idsc().c_str(), meter->driverName().str().c_str());
-                        }
-                        else
-                        {
-                            handled = true;
-                        }
-                    }
-                }
-            }
-        }
-        for (auto f : telegram_listeners_)
-        {
-            f(about, input_frame);
-        }
-        if (isVerboseEnabled() && !handled)
-        {
-            verbose("(wmbus) telegram from %s ignored by all configured meters!\n", ids.c_str());
-        }
-        return handled;
-    }
-
-    void onTelegram(function<bool(AboutTelegram &about, vector<uchar>)> cb)
-    {
-        telegram_listeners_.push_back(cb);
-    }
-
-    void whenMeterUpdated(std::function<void(Telegram*t,Meter*)> cb)
-    {
-        on_meter_updated_ = cb;
-    }
-
-    void pollMeters(shared_ptr<BusManager> bus)
-    {
-        for (auto &m : meters_)
-        {
-            m->poll(bus);
-        }
-    }
-
-    void analyzeEnabled(bool b, OutputFormat f, string force_driver, string key, bool verbose)
-    {
-        should_analyze_ = b;
-        analyze_format_ = f;
-        if (force_driver != "auto")
-        {
-            analyze_driver_ = force_driver;
-        }
-        analyze_key_ = key;
-        analyze_verbose_ = verbose;
-    }
-
-    string findBestOldStyleDriver(MeterInfo &mi,
-                                  int *best_length,
-                                  int *best_understood,
-                                  Telegram &t,
-                                  AboutTelegram &about,
-                                  vector<uchar> &input_frame,
-                                  bool simulated,
-                                  string force)
-    {
-        vector<MeterDriver> old_drivers;
-#define X(mname,linkmode,info,type,cname) old_drivers.push_back(MeterDriver::type);
-LIST_OF_METERS
-#undef X
-
-        string best_driver = "";
-        for (MeterDriver odr : old_drivers)
-        {
-            if (odr == MeterDriver::AUTO) continue;
-            if (odr == MeterDriver::UNKNOWN) continue;
-            string driver_name = toString(odr);
-            if (force != "")
-            {
-                if (driver_name != force) continue;
-                return driver_name;
-            }
-
-            if (force == "" &&
-                !isMeterDriverReasonableForMedia(odr, "", t.dll_type) &&
-                !isMeterDriverReasonableForMedia(odr, "", t.tpl_type))
-            {
-                // Sanity check, skip this driver since it is not relevant for this media.
-                continue;
-            }
-
-            debug("Testing old style driver %s...\n", driver_name.c_str());
-            mi.driver = odr;
-            mi.driver_name = DriverName("");
-
-            auto meter = createMeter(&mi);
-
-            bool match = false;
-            string id;
-            bool h = meter->handleTelegram(about, input_frame, simulated, &id, &match, &t);
-            if (!match)
-            {
-                debug("no match!\n");
-            }
-            else if (!h)
-            {
-                // Oups, we added a new meter object tailored for this telegram
-                // but it still did not handle it! This can happen if the wrong
-                // decryption key was used. But it is ok if analyzing....
-                debug("Newly created meter (%s %s %s) did not handle telegram!\n",
-                      meter->name().c_str(), meter->idsc().c_str(), meter->driverName().str().c_str());
-            }
-            else
-            {
-                int l = 0;
-                int u = 0;
-                t.analyzeParse(OutputFormat::NONE, &l, &u);
-                if (analyze_verbose_ && force == "") printf("(verbose) old %02d/%02d %s\n", u, l, driver_name.c_str());
-                if (u > *best_understood)
-                {
-                    *best_understood = u;
-                    *best_length = l;
-                    best_driver = driver_name;
-                    if (analyze_verbose_ && force == "") printf("(verbose) old best so far: %s %02d/%02d\n", best_driver.c_str(), u, l);
-                }
-            }
-        }
-        return best_driver;
-    }
-
-    string findBestNewStyleDriver(MeterInfo &mi,
-                                  int *best_length,
-                                  int *best_understood,
-                                  Telegram &t,
-                                  AboutTelegram &about,
-                                  vector<uchar> &input_frame,
-                                  bool simulated,
-                                  string only)
-    {
-        string best_driver = "";
-
-        for (DriverInfo *ndr : allDrivers())
-        {
-            string driver_name = toString(*ndr);
-            if (only != "")
-            {
-                if (driver_name != only) continue;
-                return driver_name;
-            }
-
-            if (only == "" &&
-                !isMeterDriverReasonableForMedia(MeterDriver::AUTO, driver_name, t.dll_type) &&
-                !isMeterDriverReasonableForMedia(MeterDriver::AUTO, driver_name, t.tpl_type))
-            {
-                // Sanity check, skip this driver since it is not relevant for this media.
-                continue;
-            }
-
-            debug("Testing new style driver %s...\n", driver_name.c_str());
-            mi.driver = MeterDriver::UNKNOWN;
-            mi.driver_name = driver_name;
-
-            auto meter = createMeter(&mi);
-
-            bool match = false;
-            string id;
-            bool h = meter->handleTelegram(about, input_frame, simulated, &id, &match, &t);
-
-            if (!match)
-            {
-                debug("no match!\n");
-            }
-            else if (!h)
-            {
-                // Oups, we added a new meter object tailored for this telegram
-                // but it still did not handle it! This can happen if the wrong
-                // decryption key was used. But it is ok if analyzing....
-                debug("Newly created meter (%s %s %s) did not handle telegram!\n",
-                      meter->name().c_str(), meter->idsc().c_str(), meter->driverName().str().c_str());
-            }
-            else
-            {
-                int l = 0;
-                int u = 0;
-                t.analyzeParse(OutputFormat::NONE, &l, &u);
-                if (analyze_verbose_ && only == "") printf("(verbose) new %02d/%02d %s\n", u, l, driver_name.c_str());
-                if (u > *best_understood)
-                {
-                    *best_understood = u;
-                    *best_length = l;
-                    best_driver = ndr->name().str();
-                    if (analyze_verbose_ && only == "") printf("(verbose) new best so far: %s %02d/%02d\n", best_driver.c_str(), u, l);
-                }
-            }
-        }
-        return best_driver;
-    }
-
-    void analyzeTelegram(AboutTelegram &about, vector<uchar> &input_frame, bool simulated)
-    {
-        Telegram t;
-        t.about = about;
-
-        bool ok = t.parseHeader(input_frame);
-        if (simulated) t.markAsSimulated();
-        t.markAsBeingAnalyzed();
-
-        if (!ok)
-        {
-            printf("Could not even analyze header, giving up.\n");
-            return;
-        }
-
-        if (meter_templates_.size() > 0)
-        {
-            error("You cannot specify a meter quadruple when analyzing.\n"
-                  "Instead use --analyze=<format>:<driver>:<key>\n"
-                  "where <formt> <driver> <key> are all optional.\n"
-                  "E.g.        --analyze=terminal:multical21:001122334455667788001122334455667788\n"
-                  "            --analyze=001122334455667788001122334455667788\n"
-                  "            --analyze\n");
-        }
-
-        // Overwrite the id with the id from the telegram to be analyzed.
-        MeterInfo mi;
-        mi.key = analyze_key_;
-        mi.ids.clear();
-        mi.ids.push_back(t.ids.back());
-        mi.idsc = t.ids.back();
-
-        // This will be the driver that will actually decode and print with.
-        string using_driver = "";
-        int using_length = 0;
-        int using_understood = 0;
-
-        // Driver that understands most of the telegram content.
-        string best_driver = "";
-        int best_length = 0;
-        int best_understood = 0;
-
-        int old_best_length = 0;
-        int old_best_understood = 0;
-        string best_old_driver = findBestOldStyleDriver(mi, &old_best_length, &old_best_understood, t, about, input_frame, simulated, "");
-
-        int new_best_length = 0;
-        int new_best_understood = 0;
-        string best_new_driver = findBestNewStyleDriver(mi, &new_best_length, &new_best_understood, t, about, input_frame, simulated, "");
-
-        mi.driver = MeterDriver::UNKNOWN;
-        mi.driver_name = DriverName("");
-
-        // Use the existing mapping from mfct/media/version to driver.
-        DriverInfo auto_di = pickMeterDriver(&t);
-        string auto_driver = auto_di.name().str();
-        if (auto_driver == "")
-        {
-            auto_driver = toString(auto_di.driver());
-            if (auto_driver == "unknown")
-            {
-                auto_driver = "";
-            }
-        }
-
-        // Will be non-empty if an explicit driver has been selected.
-        string force_driver = analyze_driver_;
-        int force_length = 0;
-        int force_understood = 0;
-
-        // If an auto driver is found and no other driver has been forced, use the auto driver.
-        if (force_driver == "" && auto_driver != "")
-        {
-            force_driver = auto_driver;
-        }
-
-        if (force_driver != "")
-        {
-            using_driver = findBestOldStyleDriver(mi, &force_length, &force_understood, t, about, input_frame, simulated,
-                                                  force_driver);
-
-            if (using_driver != "")
-            {
-                mi.driver = toMeterDriver(using_driver);
-                mi.driver_name = DriverName("");
-                using_driver += "(driver should be upgraded)";
-            }
-            else
-            {
-                using_driver = findBestNewStyleDriver(mi, &force_length, &force_understood, t, about, input_frame, simulated,
-                                                      force_driver);
-                mi.driver_name = using_driver;
-                mi.driver = MeterDriver::UNKNOWN;
-            }
-            using_length = force_length;
-            using_understood = force_understood;
-        }
-
-        if (old_best_understood > new_best_understood)
-        {
-            best_length = old_best_length;
-            best_understood = old_best_understood;
-            best_driver = best_old_driver+"(driver should be upgraded)";
-            if (using_driver == "")
-            {
-                mi.driver = toMeterDriver(best_old_driver);
-                mi.driver_name = DriverName("");
-                using_driver = best_driver;
-                using_length = best_length;
-                using_understood = best_understood;
-            }
-        }
-        else if (new_best_understood >= old_best_understood)
-        {
-            best_length = new_best_length;
-            best_understood = new_best_understood;
-            best_driver = best_new_driver;
-            if (using_driver == "")
-            {
-                mi.driver_name = best_new_driver;
-                mi.driver = MeterDriver::UNKNOWN;
-                using_driver = best_new_driver;
-                using_length = best_length;
-                using_understood = best_understood;
-            }
-        }
-
-        auto meter = createMeter(&mi);
-
-        bool match = false;
-        string id;
-
-        meter->handleTelegram(about, input_frame, simulated, &id, &match, &t);
-
-        int u = 0;
-        int l = 0;
-
-        string output = t.analyzeParse(analyze_format_, &u, &l);
-
-        string hr, fields, json;
-        vector<string> envs, more_json, selected_fields;
-
-        meter->printMeter(&t, &hr, &fields, '\t', &json,
-                          &envs, &more_json, &selected_fields, true);
-
-        if (auto_driver == "")
-        {
-            auto_driver = "not found!";
-        }
-
-        printf("Auto driver  : %s\n", auto_driver.c_str());
-        printf("Best driver  : %s %02d/%02d\n", best_driver.c_str(), best_understood, best_length);
-        printf("Using driver : %s %02d/%02d\n", using_driver.c_str(), using_understood, using_length);
-
-        printf("%s\n", output.c_str());
-
-        printf("%s\n", json.c_str());
-    }
-
-    MeterManagerImplementation(bool daemon) : is_daemon_(daemon) {}
-    ~MeterManagerImplementation() {}
-};
-
-shared_ptr<MeterManager> createMeterManager(bool daemon)
-{
-    return shared_ptr<MeterManager>(new MeterManagerImplementation(daemon));
-}
 
 MeterCommonImplementation::MeterCommonImplementation(MeterInfo &mi,
                                                      string driver) :
@@ -780,14 +219,6 @@ MeterCommonImplementation::MeterCommonImplementation(MeterInfo &mi,
     force_mfct_index_ = di.forceMfctIndex();
 }
 
-void MeterCommonImplementation::addConversions(std::vector<Unit> cs)
-{
-    for (Unit c : cs)
-    {
-        conversions_.push_back(c);
-    }
-}
-
 void MeterCommonImplementation::addShell(string cmdline)
 {
     shell_cmdlines_.push_back(cmdline);
@@ -827,7 +258,8 @@ void MeterCommonImplementation::addExtraCalculatedField(string ecf)
         "Calculated: "+ecf,
         PrintProperty::JSON | PrintProperty::FIELD,
         quantity,
-        parts[1]
+        parts[1],
+        unit
         );
 }
 
@@ -873,7 +305,7 @@ void MeterCommonImplementation::addMfctTPLStatusBits(Translate::Lookup lookup)
 void MeterCommonImplementation::addPrint(string vname, Quantity vquantity,
                                          function<double(Unit)> getValueFunc, string help, PrintProperties pprops)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -894,7 +326,7 @@ void MeterCommonImplementation::addPrint(string vname, Quantity vquantity,
 void MeterCommonImplementation::addPrint(string vname, Quantity vquantity, Unit unit,
                                          function<double(Unit)> getValueFunc, string help, PrintProperties pprops)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -916,7 +348,7 @@ void MeterCommonImplementation::addPrint(string vname, Quantity vquantity,
                                          function<string()> getValueFunc,
                                          string help, PrintProperties pprops)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -949,7 +381,7 @@ void MeterCommonImplementation::addNumericFieldWithExtractor(
     function<void(Unit,double)> setValueFunc,
     function<double(Unit)> getValueFunc)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -975,7 +407,7 @@ void MeterCommonImplementation::addNumericFieldWithExtractor(string vname,
                                                              FieldMatcher matcher,
                                                              Unit use_unit)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -1019,7 +451,46 @@ void MeterCommonImplementation::addNumericFieldWithCalculator(string vname,
                   vquantity,
                   use_unit == Unit::Unknown ? defaultUnitForQuantity(vquantity) : use_unit,
                   VifScaling::Auto,
-                  FieldMatcher::build(),
+                  FieldMatcher::noMatcher(),
+                  help,
+                  print_properties,
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  NoLookup, /* Lookup table */
+                  f /* Formula */
+            ));
+}
+
+void MeterCommonImplementation::addNumericFieldWithCalculatorAndMatcher(string vname,
+                                                                        string help,
+                                                                        PrintProperties print_properties,
+                                                                        Quantity vquantity,
+                                                                        string formula,
+                                                                        FieldMatcher matcher,
+                                                                        Unit use_unit)
+{
+    Formula *f = newFormula();
+    bool ok = f->parse(this, formula);
+    if (!ok)
+    {
+        string err = f->errors();
+        warning("Warning! Ignoring calculated field %s because parse failed:\n%s",
+                vname.c_str(),
+                err.c_str());
+        delete f;
+        return;
+    }
+    assert(ok);
+
+    field_infos_.push_back(
+        FieldInfo(field_infos_.size(),
+                  vname,
+                  vquantity,
+                  use_unit == Unit::Unknown ? defaultUnitForQuantity(vquantity) : use_unit,
+                  VifScaling::Auto,
+                  matcher,
                   help,
                   print_properties,
                   NULL,
@@ -1039,7 +510,7 @@ void MeterCommonImplementation::addNumericField(
     function<void(Unit,double)> setValueFunc,
     function<double(Unit)> getValueFunc)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -1051,6 +522,31 @@ void MeterCommonImplementation::addNumericField(
                   getValueFunc,
                   NULL,
                   setValueFunc,
+                  NULL,
+                  NoLookup, /* Lookup table */
+                  NULL /* Formula */
+            ));
+}
+
+void MeterCommonImplementation::addNumericField(
+    string vname,
+    Quantity vquantity,
+    PrintProperties print_properties,
+    string help,
+    Unit use_unit)
+{
+    field_infos_.emplace_back(
+        FieldInfo(field_infos_.size(),
+                  vname,
+                  vquantity,
+                  use_unit == Unit::Unknown ? defaultUnitForQuantity(vquantity) : use_unit,
+                  VifScaling::None,
+                  FieldMatcher::noMatcher(),
+                  help,
+                  print_properties,
+                  NULL, // getValueFunc,
+                  NULL,
+                  NULL, // setValueFunc
                   NULL,
                   NoLookup, /* Lookup table */
                   NULL /* Formula */
@@ -1071,7 +567,7 @@ void MeterCommonImplementation::addStringFieldWithExtractor(
     function<void(string)> setValueFunc,
     function<string()> getValueFunc)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -1094,7 +590,7 @@ void MeterCommonImplementation::addStringFieldWithExtractor(string vname,
                                                             PrintProperties print_properties,
                                                             FieldMatcher matcher)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   Quantity::Text,
@@ -1127,7 +623,7 @@ void MeterCommonImplementation::addStringFieldWithExtractorAndLookup(
     function<string()> getValueFunc,
     Translate::Lookup lookup)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   vquantity,
@@ -1151,7 +647,7 @@ void MeterCommonImplementation::addStringFieldWithExtractorAndLookup(string vnam
                                                                      FieldMatcher matcher,
                                                                      Translate::Lookup lookup)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   Quantity::Text,
@@ -1173,7 +669,7 @@ void MeterCommonImplementation::addStringField(string vname,
                                                string help,
                                                PrintProperties print_properties)
 {
-    field_infos_.push_back(
+    field_infos_.emplace_back(
         FieldInfo(field_infos_.size(),
                   vname,
                   Quantity::Text,
@@ -1329,6 +825,11 @@ string MeterCommonImplementation::idsc()
 vector<FieldInfo> &MeterCommonImplementation::fieldInfos()
 {
     return field_infos_;
+}
+
+vector<string> &MeterCommonImplementation::extraConstantFields()
+{
+    return extra_constant_fields_;
 }
 
 string MeterCommonImplementation::name()
@@ -1588,7 +1089,7 @@ void MeterCommonImplementation::triggerUpdate(Telegram *t)
     t->handled = true;
 }
 
-string concatAllFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &fields, vector<Unit> &cs, bool hr,
+string concatAllFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &fields, bool hr,
                        vector<string> *extra_constant_fields)
 {
     string s;
@@ -1612,7 +1113,7 @@ string concatAllFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &fields,
             }
             else
             {
-                Unit u = replaceWithConversionUnit(fi.defaultUnit(), cs);
+                Unit u = fi.defaultUnit();
                 double v = m->getNumericValue(&fi, u);
                 if (hr) {
                     s += valueToString(v, u);
@@ -1690,8 +1191,9 @@ bool checkCommonField(string *buf, string field, Meter *m, Telegram *t, char c, 
 
 // Is the desired field one of the meter printable fields?
 bool checkPrintableField(string *buf, string field, Meter *m, Telegram *t, char c,
-                         vector<FieldInfo> &fields, vector<Unit> &cs, bool human_readable)
+                         vector<FieldInfo> &fields, bool human_readable)
 {
+
     for (FieldInfo &fi : fields)
     {
         if (fi.xuantity() == Quantity::Text)
@@ -1705,40 +1207,34 @@ bool checkPrintableField(string *buf, string field, Meter *m, Telegram *t, char 
         }
         else
         {
-            // Doubles have to be converted into the proper unit.
-            string default_unit = unitToStringLowerCase(fi.defaultUnit());
-            string var = fi.vname()+"_"+default_unit;
-            if (field == var)
+            if (fi.defaultUnit() == Unit::DateLT)
             {
-                // Default unit.
-                *buf += valueToString(m->getNumericValue(&fi, fi.defaultUnit()), fi.defaultUnit());
-                if (human_readable)
-                {
-                    *buf += " ";
-                    *buf += unitToStringHR(fi.defaultUnit());
-                }
+                *buf += strdate(m->getNumericValue(&fi, Unit::DateLT));
+                *buf += c;
+                return true;
+            }
+            else if (fi.defaultUnit() == Unit::DateTimeLT)
+            {
+                *buf += strdatetime(m->getNumericValue(&fi, Unit::DateTimeLT));
                 *buf += c;
                 return true;
             }
             else
             {
-                // Added conversion unit.
-                Unit u = replaceWithConversionUnit(fi.defaultUnit(), cs);
-                if (u != fi.defaultUnit())
+                // Doubles have to be converted into the proper unit.
+                string default_unit = unitToStringLowerCase(fi.defaultUnit());
+                string var = fi.vname()+"_"+default_unit;
+                if (field == var)
                 {
-                    string unit = unitToStringLowerCase(u);
-                    string var = fi.vname()+"_"+unit;
-                    if (field == var)
+                    // Default unit.
+                    *buf += valueToString(m->getNumericValue(&fi, fi.defaultUnit()), fi.defaultUnit());
+                    if (human_readable)
                     {
-                        *buf += valueToString(m->getNumericValue(&fi, u), u);
-                        if (human_readable)
-                        {
-                            *buf += " ";
-                            *buf += unitToStringHR(u);
-                        }
-                        *buf += c;
-                        return true;
+                        *buf += " ";
+                        *buf += unitToStringHR(fi.defaultUnit());
                     }
+                    *buf += c;
+                    return true;
                 }
             }
         }
@@ -1761,7 +1257,7 @@ bool checkConstantField(string *buf, string field, char c, vector<string> *extra
     return false;
 }
 
-string concatFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &prints, vector<Unit> &cs, bool human_readable,
+string concatFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &prints, bool human_readable,
                     vector<string> *selected_fields, vector<string> *extra_constant_fields)
 {
     if (selected_fields == NULL || selected_fields->size() == 0)
@@ -1773,7 +1269,7 @@ string concatFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &prints, ve
         }
         else
         {
-            return concatAllFields(m, t, c, prints, cs, human_readable, extra_constant_fields);
+            return concatAllFields(m, t, c, prints, human_readable, extra_constant_fields);
         }
     }
     string buf = "";
@@ -1783,7 +1279,7 @@ string concatFields(Meter *m, Telegram *t, char c, vector<FieldInfo> &prints, ve
         bool handled = checkCommonField(&buf, field, m, t, c, human_readable);
         if (handled) continue;
 
-        handled = checkPrintableField(&buf, field, m, t, c, prints, cs, human_readable);
+        handled = checkPrintableField(&buf, field, m, t, c, prints, human_readable);
         if (handled) continue;
 
         handled = checkConstantField(&buf, field, c, extra_constant_fields);
@@ -1850,10 +1346,10 @@ bool MeterCommonImplementation::handleTelegram(AboutTelegram &about, vector<ucha
 
     // Invoke standardized field extractors!
     processFieldExtractors(&t);
-    // Invoke any calculators working on the extracted fields.
-    processFieldCalculators();
     // Invoke tailor made meter specific parsing!
     processContent(&t);
+    // Invoke any calculators working on the extracted fields.
+    processFieldCalculators();
     // All done....
 
     if (isDebugEnabled())
@@ -1871,7 +1367,8 @@ bool MeterCommonImplementation::handleTelegram(AboutTelegram &about, vector<ucha
 
 void MeterCommonImplementation::processFieldExtractors(Telegram *t)
 {
-    map<FieldInfo*,DVEntry*> found;
+    // Multiple dventries can be matched against a single wildcard FieldInfo.
+    map<FieldInfo*,set<DVEntry*>> founds;
 
     // Sort the dv_entries based on their offset in the telegram.
     // I.e. restore the ordering that was implicit in the telegram.
@@ -1889,7 +1386,16 @@ void MeterCommonImplementation::processFieldExtractors(Telegram *t)
     {
         int current_match_nr = 0;
 
-        // This field_info has not been matched to a dv_entry before!
+        if (!fi.hasMatcher())
+        {
+            // This field_info has not been matched to a dv_entry before!
+            debug("(meters) skipping field without matcher %s(%s)[%d]...\n",
+                  fi.vname().c_str(),
+                  toString(fi.xuantity()),
+                  fi.index());
+            continue;
+        }
+
         debug("(meters) trying field info %s(%s)[%d]...\n",
               fi.vname().c_str(),
               toString(fi.xuantity()),
@@ -1902,14 +1408,14 @@ void MeterCommonImplementation::processFieldExtractors(Telegram *t)
             {
                 current_match_nr++;
 
-                if (fi.matcher().index_nr != IndexNr(current_match_nr))
+                if (fi.matcher().index_nr != IndexNr(current_match_nr) &&
+                    !fi.matcher().expectedToMatchAgainstMultipleEntries())
                 {
                     // This field info did match, but requires another index nr!
                     // Increment the current index nr and look for the next match.
                 }
-                else if (found.count(&fi) == 0)
+                else if (founds[&fi].count(dve) == 0 || fi.matcher().expectedToMatchAgainstMultipleEntries())
                 {
-                    // This field_info has not been matched to a dv_entry before!
                     debug("(meters) using field info %s(%s)[%d] to extract %s at offset %d\n",
                           fi.vname().c_str(),
                           toString(fi.xuantity()),
@@ -1919,19 +1425,27 @@ void MeterCommonImplementation::processFieldExtractors(Telegram *t)
 
                     dve->addFieldInfo(&fi);
                     fi.performExtraction(this, t, dve);
-                    found[&fi] = dve;
+                    founds[&fi].insert(dve);
                 }
                 else
                 {
-                    DVEntry *old = found[&fi];
+                    if (isVerboseEnabled())
+                    {
+                        set<DVEntry*> old = founds[&fi];
+                        string olds;
+                        for (DVEntry *dve : old)
+                        {
+                            olds += to_string(dve->offset)+",";
+                        }
+                        olds.pop_back();
 
-                    verbose("(meter) while processing field extractors ignoring dventry %s at offset %d matching since "
-                            "field %s was already matched against dventry %s at offset %d !\n",
-                            dve->dif_vif_key.str().c_str(),
-                            dve->offset,
-                            fi.vname().c_str(),
-                            old->dif_vif_key.str().c_str(),
-                            old->offset);
+                        verbose("(meter) while processing field extractors ignoring dventry %s at offset %d matching since "
+                                "field %s was already matched against offsets %s !\n",
+                                dve->dif_vif_key.str().c_str(),
+                                dve->offset,
+                                fi.vname().c_str(),
+                                olds.c_str());
+                    }
                 }
             }
         }
@@ -1945,7 +1459,7 @@ void MeterCommonImplementation::processFieldExtractors(Telegram *t)
         {
             fi.performExtraction(this, t, NULL);
         }
-        else if (found.count(&fi) == 0 && fi.printProperties().hasJOINTPLSTATUS())
+        else if (founds.count(&fi) == 0 && fi.printProperties().hasJOINTPLSTATUS())
         {
             // This is a status field and it joins the tpl status but it also
             // has a potential dve match, which did not trigger. Now
@@ -1957,10 +1471,10 @@ void MeterCommonImplementation::processFieldExtractors(Telegram *t)
 
 void MeterCommonImplementation::processFieldCalculators()
 {
-    // Iterate over the fields with formulas.
+    // Iterate over the fields with formulas but no matcher.
     for (FieldInfo &fi : field_infos_)
     {
-        if (fi.hasFormula())
+        if (fi.hasFormula() && !fi.hasMatcher())
         {
             fi.performCalculation(this);
         }
@@ -1971,7 +1485,7 @@ void MeterCommonImplementation::processContent(Telegram *t)
 {
 }
 
-void MeterCommonImplementation::setNumericValue(FieldInfo *fi, Unit u, double v)
+void MeterCommonImplementation::setNumericValue(FieldInfo *fi, DVEntry *dve, Unit u, double v)
 {
     if (fi->hasSetNumericValueOverride())
     {
@@ -1981,8 +1495,31 @@ void MeterCommonImplementation::setNumericValue(FieldInfo *fi, Unit u, double v)
     }
 
     // Store value in default meter location for numeric values.
-    string field_name_no_unit = fi->vname();
-    numeric_values_[pair<string,Quantity>(field_name_no_unit,fi->xuantity())] = NumericField(u, v, fi);
+    string field_name_no_unit;
+
+    if (dve == NULL)
+    {
+        field_name_no_unit = fi->vname();
+    }
+    else
+    {
+        field_name_no_unit = fi->generateFieldNameNoUnit(dve);
+    }
+
+    numeric_values_[pair<string,Quantity>(field_name_no_unit, fi->xuantity())] = NumericField(u, v, fi);
+}
+
+void MeterCommonImplementation::setNumericValue(string vname, Unit u, double v)
+{
+    Quantity q = toQuantity(u);
+    FieldInfo *fi = findFieldInfo(vname, q);
+
+    if (fi == NULL)
+    {
+        warning("(meter) cannot set numeric value %g %s for non-existant field \"%s\" %s\n", v, unitToStringLowerCase(u).c_str(), vname.c_str(), toString(q));
+        return;
+    }
+    setNumericValue(fi, NULL, u, v);
 }
 
 bool MeterCommonImplementation::hasValue(FieldInfo *fi)
@@ -2015,6 +1552,25 @@ double MeterCommonImplementation::getNumericValue(FieldInfo *fi, Unit to)
 
     string field_name_no_unit = fi->vname();
     pair<string,Quantity> key(field_name_no_unit,fi->xuantity());
+    if (numeric_values_.count(key) == 0)
+    {
+        return std::numeric_limits<double>::quiet_NaN(); // This is translated into a null in the json.
+    }
+    NumericField &nf = numeric_values_[key];
+    return convert(nf.value, nf.unit, to);
+}
+
+double MeterCommonImplementation::getNumericValue(string vname, Unit to)
+{
+    Quantity q = toQuantity(to);
+    FieldInfo *fi = findFieldInfo(vname, q);
+
+    if (fi != NULL && fi->hasGetNumericValueOverride())
+    {
+        return fi->getNumericValueOverride(to);
+    }
+
+    pair<string,Quantity> key(vname,q);
     if (numeric_values_.count(key) == 0)
     {
         return std::numeric_limits<double>::quiet_NaN(); // This is translated into a null in the json.
@@ -2104,6 +1660,34 @@ string MeterCommonImplementation::renderJsonOnlyDefaultUnit(string vname, Quanti
     return fi->renderJsonOnlyDefaultUnit(this);
 }
 
+string MeterCommonImplementation::debugValues()
+{
+    string s;
+
+    for (auto &p : numeric_values_)
+    {
+        string vname = p.first.first;
+        Quantity q = p.first.second;
+        NumericField& nf = p.second;
+
+        s += tostrprintf("%s %s = %g\n", toString(q), vname.c_str(),  nf.value);
+    }
+
+    for (auto &p : string_values_)
+    {
+        string vname = p.first;
+        StringField& nf = p.second;
+
+        s += tostrprintf("%s = \"%s\"\n", vname.c_str(), nf.value.c_str());
+    }
+
+    return s;
+}
+
+FieldInfo::~FieldInfo()
+{
+}
+
 FieldInfo::FieldInfo(int index,
                      string vname,
                      Quantity xuantity,
@@ -2132,10 +1716,10 @@ FieldInfo::FieldInfo(int index,
         set_numeric_value_override_(set_numeric_value_override),
         set_string_value_override_(set_string_value_override),
         lookup_(lookup),
-        formula_(formula)
+        formula_(formula),
+        field_name_(newStringInterpolator()),
+        valid_field_name_(field_name_->parse(vname))
 {
-    field_name_ = unique_ptr<StringInterpolator>(newStringInterpolator());
-    valid_field_name_ = field_name_->parse(vname);
     if (!valid_field_name_)
     {
         warning("(meter) field template \"%s\" could not be parsed!\n", vname.c_str());
@@ -2152,7 +1736,14 @@ string FieldInfo::renderJsonText(Meter *m)
     return renderJson(m, NULL);
 }
 
-string FieldInfo::generateFieldName(DVEntry *dve)
+string FieldInfo::generateFieldNameNoUnit(DVEntry *dve)
+{
+    if (!valid_field_name_) return "bad_field_name";
+
+    return field_name_->apply(dve);
+}
+
+string FieldInfo::generateFieldNameWithUnit(DVEntry *dve)
 {
     if (!valid_field_name_) return "bad_field_name";
 
@@ -2167,12 +1758,14 @@ string FieldInfo::generateFieldName(DVEntry *dve)
     return var+"_"+default_unit;
 }
 
-string FieldInfo::renderJson(Meter *m, vector<Unit> *conversions)
+
+string FieldInfo::renderJson(Meter *m, DVEntry *dve)
 {
     string s;
 
     string default_unit = unitToStringLowerCase(defaultUnit());
-    string var = vname();
+    string field_name = generateFieldNameNoUnit(dve);
+
     if (xuantity() == Quantity::Text)
     {
         string v = m->getStringValue(this);
@@ -2182,28 +1775,29 @@ string FieldInfo::renderJson(Meter *m, vector<Unit> *conversions)
             // be translated into "something":null in the json, indicating that there is no value.
             // This should not be a problem for now. Lets deal with it when a meter decides to send "null"
             // as its version string for example.
-            s += "\""+var+"\":null";
+            s += "\""+field_name+"\":null";
         }
         else
         {
             // Normally the string values are quoted in json. TODO quote the value properly.
             // A well crafted meter could send a version string with " and break the json format.
-            s += "\""+var+"\":\""+v+"\"";
+            s += "\""+field_name+"\":\""+v+"\"";
         }
     }
     else
     {
-        s += "\""+var+"_"+default_unit+"\":"+valueToString(m->getNumericValue(this, defaultUnit()), defaultUnit());
-
-        if (conversions != NULL)
+        if (defaultUnit() == Unit::DateLT)
         {
-            Unit u = replaceWithConversionUnit(defaultUnit(), *conversions);
-            if (u != defaultUnit())
-            {
-                string unit = unitToStringLowerCase(u);
-                // Appending extra conversion unit.
-                s += ",\""+var+"_"+unit+"\":"+valueToString(m->getNumericValue(this, u), u);
-            }
+            s += "\""+field_name+"_"+default_unit+"\":\""+strdate(m->getNumericValue(field_name, Unit::DateLT))+"\"";
+        }
+        else if (defaultUnit() == Unit::DateTimeLT)
+        {
+            s += "\""+field_name+"_"+default_unit+"\":\""+strdatetime(m->getNumericValue(field_name, Unit::DateTimeLT))+"\"";
+        }
+        else
+        {
+            // All numeric values.
+            s += "\""+field_name+"_"+default_unit+"\":"+valueToString(m->getNumericValue(field_name, defaultUnit()), defaultUnit());
         }
     }
 
@@ -2219,8 +1813,8 @@ void MeterCommonImplementation::printMeter(Telegram *t,
                                            vector<string> *selected_fields,
                                            bool pretty_print_json)
 {
-    *human_readable = concatFields(this, t, '\t', field_infos_, conversions_, true, selected_fields, extra_constant_fields);
-    *fields = concatFields(this, t, separator, field_infos_, conversions_, false, selected_fields, extra_constant_fields);
+    *human_readable = concatFields(this, t, '\t', field_infos_, true, selected_fields, extra_constant_fields);
+    *fields = concatFields(this, t, separator, field_infos_, false, selected_fields, extra_constant_fields);
 
     string media;
     if (t->tpl_id_found)
@@ -2259,7 +1853,7 @@ void MeterCommonImplementation::printMeter(Telegram *t,
     }
 
     // Iterate over the meter field infos...
-    map<FieldInfo*,DVEntry*> found; // Found from the telegram
+    map<FieldInfo*,set<DVEntry*>> founds; // Multiple dventries can match to a single field info.
     set<string> found_vnames;
 
     for (FieldInfo& fi : field_infos_)
@@ -2274,10 +1868,11 @@ void MeterCommonImplementation::printMeter(Telegram *t,
                 // Has the entry been matches to this field, then print it as json.
                 if (dve->hasFieldInfo(&fi))
                 {
-                    assert(found.count(&fi) == 0);
+                    assert(founds[&fi].count(dve) == 0);
 
-                    found[&fi] = dve;
-                    found_vnames.insert(fi.vname());
+                    founds[&fi].insert(dve);
+                    string field_name = fi.generateFieldNameNoUnit(dve);
+                    found_vnames.insert(field_name);
                 }
             }
         }
@@ -2287,17 +1882,20 @@ void MeterCommonImplementation::printMeter(Telegram *t,
     {
         if (fi.printProperties().hasJSON())
         {
-            if (found.count(&fi) != 0)
+            if (founds.count(&fi) != 0)
             {
-                DVEntry *dve = found[&fi];
-                debug("(meters) render field %s(%s %s)[%d] with dventry @%d key %s data %s\n",
-                      fi.vname().c_str(), toString(fi.xuantity()), unitToStringLowerCase(fi.defaultUnit()).c_str(), fi.index(),
-                      dve->offset,
-                      dve->dif_vif_key.str().c_str(),
-                      dve->value.c_str());
-                string out = fi.renderJson(this, &conversions());
-                debug("(meters)             %s\n", out.c_str());
-                s += indent+out+","+newline;
+                // This field info has matched against some dventries.
+                for (DVEntry *dve : founds[&fi])
+                {
+                    debug("(meters) render field %s(%s %s)[%d] with dventry @%d key %s data %s\n",
+                          fi.vname().c_str(), toString(fi.xuantity()), unitToStringLowerCase(fi.defaultUnit()).c_str(), fi.index(),
+                          dve->offset,
+                          dve->dif_vif_key.str().c_str(),
+                          dve->value.c_str());
+                    string out = fi.renderJson(this, dve);
+                    debug("(meters)             %s\n", out.c_str());
+                    s += indent+out+","+newline;
+                }
             }
             else
             {
@@ -2314,7 +1912,7 @@ void MeterCommonImplementation::printMeter(Telegram *t,
                     // Or if no value has been received, null.
                     debug("(meters) render field %s(%s)[%d] without dventry\n",
                           fi.vname().c_str(), toString(fi.xuantity()), fi.index());
-                    string out = fi.renderJson(this, &conversions());
+                    string out = fi.renderJson(this, NULL);
                     debug("(meters)             %s\n", out.c_str());
                     s += indent+out+","+newline;
                 }
@@ -2382,14 +1980,6 @@ void MeterCommonImplementation::printMeter(Telegram *t,
             {
                 string envvar = "METER_"+var+"_"+default_unit+"="+valueToString(getNumericValue(&fi, fi.defaultUnit()), fi.defaultUnit());
                 envs->push_back(envvar);
-
-                Unit u = replaceWithConversionUnit(fi.defaultUnit(), conversions_);
-                if (u != fi.defaultUnit())
-                {
-                    string unit = unitToStringUpperCase(u);
-                    string envvar = "METER_"+var+"_"+unit+"="+valueToString(getNumericValue(&fi, u), u);
-                    envs->push_back(envvar);
-                }
             }
         }
     }
@@ -2518,7 +2108,6 @@ shared_ptr<Meter> createMeter(MeterInfo *mi)
     if (di != NULL)
     {
         shared_ptr<Meter> newm = di->construct(*mi);
-        newm->addConversions(mi->conversions);
         for (string &j : mi->extra_calculated_fields)
         {
             newm->addExtraCalculatedField(j);
@@ -2546,7 +2135,6 @@ shared_ptr<Meter> createMeter(MeterInfo *mi)
         case MeterDriver::driver:                           \
         {                                                   \
             newm = create##cname(*mi);                      \
-            newm->addConversions(mi->conversions);          \
             newm->setPollInterval(mi->poll_interval);       \
             verbose("(meter) created %s " #mname " %s %s\n", \
                     mi->name.c_str(), mi->idsc.c_str(), keymsg);              \
@@ -2735,7 +2323,12 @@ void FieldInfo::performExtraction(Meter *m, Telegram *t, DVEntry *dve)
         // Extract a string.
         extractString(m, t, dve);
     }
-    else if (!hasFormula())
+    else if (hasFormula())
+    {
+        double value = formula_->calculate(defaultUnit(), dve, m);
+        m->setNumericValue(this, dve, defaultUnit(), value);
+    }
+    else
     {
         // Extract a numeric.
         extractNumeric(m, t, dve);
@@ -2747,7 +2340,7 @@ void FieldInfo::performCalculation(Meter *m)
     assert(hasFormula());
 
     double value = formula_->calculate(defaultUnit());
-    m->setNumericValue(this, defaultUnit(), value);
+    m->setNumericValue(this, NULL, defaultUnit(), value);
 }
 
 bool FieldInfo::hasMatcher()
@@ -2813,8 +2406,11 @@ bool FieldInfo::extractNumeric(Meter *m, Telegram *t, DVEntry *dve)
     assert(dve != NULL);
     assert(key == "" || dve->dif_vif_key.str() == key);
 
-    // Generate the json field name:
-    string field_name = generateFieldName(dve);
+    string field_name;
+    if (isDebugEnabled())
+    {
+        field_name = generateFieldNameWithUnit(dve);
+    }
 
     double extracted_double_value = NAN;
     if (dve->extractDouble(&extracted_double_value,
@@ -2824,31 +2420,44 @@ bool FieldInfo::extractNumeric(Meter *m, Telegram *t, DVEntry *dve)
                            vifScaling() == VifScaling::AutoSigned))
     {
         Unit decoded_unit = defaultUnit();
-        if (matcher_.vif_range != VIFRange::Any &&
-            matcher_.vif_range != VIFRange::AnyVolumeVIF &&
-            matcher_.vif_range != VIFRange::AnyEnergyVIF &&
-            matcher_.vif_range != VIFRange::AnyPowerVIF &&
-            matcher_.vif_range != VIFRange::None)
+        if (matcher_.vif_range == VIFRange::DateTime)
         {
+            struct tm datetime;
+            dve->extractDate(&datetime);
+            time_t tmp = mktime(&datetime);
+            string bbb = strdatetime(tmp);
+            extracted_double_value = tmp;
+        }
+        else if (matcher_.vif_range == VIFRange::Date)
+        {
+            struct tm date;
+            dve->extractDate(&date);
+            time_t tmp = mktime(&date);
+            extracted_double_value = tmp;
+        }
+        else if (matcher_.vif_range == VIFRange::AnyEnergyVIF ||
+                 matcher_.vif_range == VIFRange::AnyVolumeVIF ||
+                 matcher_.vif_range == VIFRange::AnyPowerVIF)
+        {
+            // Find the actual unit used in the telegram.
+            decoded_unit = toDefaultUnit(dve->vif);
+        }
+        else if (matcher_.vif_range != VIFRange::Any &&
+                 matcher_.vif_range != VIFRange::None)
+        {
+            // Pick the default unit for this range.
             decoded_unit = toDefaultUnit(matcher_.vif_range);
-            debug("(meter) NormalVif(%s) %s decoded %s default %s value %g\n",
-                  toString(matcher_.vif_range),
-                  field_name.c_str(),
-                  unitToStringLowerCase(decoded_unit).c_str(),
-                  unitToStringLowerCase(default_unit_).c_str(),
-                  extracted_double_value);
         }
-        else
-        {
-            debug("(meter) AnyVif(%s) %s decoded %s default %s value %g\n",
-                  toString(matcher_.vif_range),
-                  field_name.c_str(),
-                  unitToStringLowerCase(decoded_unit).c_str(),
-                  unitToStringLowerCase(default_unit_).c_str(),
-                  extracted_double_value);
-        }
-        m->setNumericValue(this, default_unit_, convert(extracted_double_value, decoded_unit, default_unit_));
-        t->addMoreExplanation(dve->offset, renderJson(m, &m->conversions()));
+
+        debug("(meter) %s %s decoded %s default %s value %g\n",
+              toString(matcher_.vif_range),
+              field_name.c_str(),
+              unitToStringLowerCase(decoded_unit).c_str(),
+              unitToStringLowerCase(default_unit_).c_str(),
+              extracted_double_value);
+
+        m->setNumericValue(this, dve, default_unit_, convert(extracted_double_value, decoded_unit, default_unit_));
+        t->addMoreExplanation(dve->offset, renderJson(m, dve));
         found = true;
     }
     return found;
@@ -2863,7 +2472,11 @@ static string add_tpl_status(string existing_status, Meter *m, Telegram *t)
         if (existing_status != "OK")
         {
             // Join the statuses.
-            existing_status += " "+status;
+            if (existing_status != "")
+            {
+                existing_status += " ";
+            }
+            existing_status += status;
         }
         else
         {
@@ -2939,7 +2552,7 @@ bool FieldInfo::extractString(Meter *m, Telegram *t, DVEntry *dve)
     assert(key == "" || dve->dif_vif_key.str() == key);
 
     // Generate the json field name:
-    string field_name = generateFieldName(dve);
+    string field_name = generateFieldNameNoUnit(dve);
 
     uint64_t extracted_bits {};
     if (lookup_.hasLookups() || (print_properties_.hasJOINTPLSTATUS()))
