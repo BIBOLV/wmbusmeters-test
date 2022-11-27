@@ -1,4 +1,4 @@
-ENV arch="${arch}"
+ARG arch
 FROM multiarch/alpine:${arch}-latest-stable AS build
 RUN apk add --no-cache alpine-sdk gcc linux-headers ncurses-dev librtlsdr-dev cmake libusb-dev bash
 RUN git clone https://github.com/weetmuts/wmbusmeters.git && \
