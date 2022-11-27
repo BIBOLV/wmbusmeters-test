@@ -44,9 +44,8 @@ jobs:
           context: docker/
           platforms: linux/${{ matrix.arch }}
           push: true
+          build-args: arch=${{ matrix.arch }}
           tags: bibolv/wmbusmeters:latest
-        env:
-          arch: ${{ matrix.arch }}
       -
         name: Build and push tagged release
         if: ${{ steps.meta.outputs.tags }}
@@ -55,6 +54,5 @@ jobs:
           context: docker/
           platforms: ${{ matrix.arch }}
           push: true
+          build-args: arch=${{ matrix.arch }}
           tags: bibolv/wmbusmeters:release-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
-        env:
-          arch: ${{ matrix.arch }}
