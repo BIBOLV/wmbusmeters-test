@@ -8,11 +8,8 @@ on:
       - '*.*.*'
 
 jobs:
-  multiarch_docker_build:
+  docker:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64, armhf]
     steps:
       -
         name: Checkout
@@ -42,9 +39,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: docker/
-          platforms: linux/${{ matrix.arch }}
+          platforms: linux/amd64,linux/arm64,linux/arm
           push: true
-          build-args: arch=${{ matrix.arch }}
           tags: bibolv/wmbusmeters:latest
       -
         name: Build and push tagged release
@@ -52,7 +48,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: docker/
-          platforms: ${{ matrix.arch }}
+          platforms: linux/amd64,linux/arm64,linux/arm
           push: true
-          build-args: arch=${{ matrix.arch }}
           tags: bibolv/wmbusmeters:release-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
