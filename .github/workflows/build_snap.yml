@@ -36,14 +36,16 @@ jobs:
     - name: Publish release to Stable
       uses: snapcore/action-publish@v1
       if: ${{ steps.meta.outputs.tags }}
+      env:
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.STORE_LOGIN }}
       with:
-        store_login: ${{ secrets.STORE_LOGIN }}
         snap: ${{ steps.build.outputs.snap }}
         release: stable
     - name: Publish latest to Edge
       uses: snapcore/action-publish@v1
       if: ${{ !steps.meta.outputs.tags }}
+      env:
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.STORE_LOGIN }}
       with:
-        store_login: ${{ secrets.STORE_LOGIN }}
         snap: ${{ steps.build.outputs.snap }}
         release: edge
