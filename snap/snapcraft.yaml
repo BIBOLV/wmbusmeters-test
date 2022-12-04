@@ -1,5 +1,5 @@
 name: wmbusmeters-test
-adopt-info: wmbusmeters-test
+adopt-info: wmbusmeters
 summary: "Program receives and decodes WMBus telegrams"
 description: |
   The program receives and decodes C1, T1 or S1 telegrams
