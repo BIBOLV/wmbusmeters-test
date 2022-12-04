@@ -1,4 +1,4 @@
-name: Build and Release Snap
+name: Build Snap
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v4
       with:
-        images: weetmuts/wmbusmeters
+        images: BIBOLV/wmbusmeters-test
         tags: type=ref,event=tag
     - name: Build
       id: build
