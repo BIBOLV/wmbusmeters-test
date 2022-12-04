@@ -1,5 +1,5 @@
-name: wmbusmeters
-adopt-info: wmbusmeters
+name: wmbusmeters-test
+adopt-info: wmbusmeters-test
 summary: "Program receives and decodes WMBus telegrams"
 description: |
   The program receives and decodes C1, T1 or S1 telegrams
@@ -31,7 +31,7 @@ parts:
       - launcher.sh
 
   wmbusmeters:
-    source: "https://github.com/weetmuts/wmbusmeters.git"
+    source: "https://github.com/BIBOLV/wmbusmeters-test.git"
     source-type: git
     override-pull: |
       snapcraftctl pull
