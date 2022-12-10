@@ -18,11 +18,14 @@ RUN mkdir build && cd build && cmake ../ && make
 
 FROM $BUILD_FROM AS scratch
 ENV QEMU_EXECVE=1
-RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr nginx
+RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr nginx nodejs npm
 WORKDIR /wmbusmeters
 COPY --from=build /wmbusmeters/build/wmbusmeters /wmbusmeters/wmbusmeters
 COPY --from=build /rtl-wmbus/build/rtl_wmbus /usr/bin/rtl_wmbus
 COPY --from=build /rtl_433/build/src/rtl_433 /usr/bin/rtl_433
+
+COPY index.js /
+RUN cd / && npm install find
 
 COPY mqtt_discovery.sh /
 RUN chmod a+x /mqtt_discovery.sh
