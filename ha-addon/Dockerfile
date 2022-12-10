@@ -18,14 +18,18 @@ RUN mkdir build && cd build && cmake ../ && make
 
 FROM $BUILD_FROM AS scratch
 ENV QEMU_EXECVE=1
-RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr nginx nodejs npm
+RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr nginx
+# Install Node.js
+RUN curl -sL https://deb.nodesource.com/setup_19.x | bash
+RUN apt-get install --yes nodejs
+RUN cd / && npm install find
+
 WORKDIR /wmbusmeters
 COPY --from=build /wmbusmeters/build/wmbusmeters /wmbusmeters/wmbusmeters
 COPY --from=build /rtl-wmbus/build/rtl_wmbus /usr/bin/rtl_wmbus
 COPY --from=build /rtl_433/build/src/rtl_433 /usr/bin/rtl_433
 
 COPY index.js /
-RUN cd / && npm install find
 
 COPY mqtt_discovery.sh /
 RUN chmod a+x /mqtt_discovery.sh
