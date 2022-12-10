@@ -22,6 +22,8 @@ RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr n
 # Install Node.js
 RUN curl -sL https://deb.nodesource.com/setup_19.x | bash
 RUN apt-get install --yes nodejs
+RUN node -v
+RUN npm -v
 RUN cd / && npm install find
 
 WORKDIR /wmbusmeters
