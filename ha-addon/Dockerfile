@@ -20,8 +20,7 @@ FROM $BUILD_FROM AS scratch
 ENV QEMU_EXECVE=1
 RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr nginx
 # Install Node.js
-RUN curl -sL https://deb.nodesource.com/setup_19.x | bash
-RUN apk add --no-cache nodejs
+RUN apk add --update npm
 RUN node -v
 RUN npm -v
 RUN cd / && npm install find
