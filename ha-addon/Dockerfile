@@ -3,7 +3,7 @@ FROM $BUILD_FROM AS build
 
 ENV LANG C.UTF-8
 
-RUN apk add --no-cache alpine-sdk gcc linux-headers ncurses-dev librtlsdr-dev cmake libusb-dev
+RUN apk add --no-cache alpine-sdk gcc linux-headers ncurses-dev librtlsdr-dev cmake libusb-dev py3-pip
 
 ADD https://api.github.com/repos/weetmuts/wmbusmeters/git/refs/heads/master version.json
 RUN git clone https://github.com/weetmuts/wmbusmeters.git && \
@@ -19,11 +19,8 @@ RUN mkdir build && cd build && cmake ../ && make
 FROM $BUILD_FROM AS scratch
 ENV QEMU_EXECVE=1
 RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb ncurses rtl-sdr nginx
-# Install Node.js
-RUN apk add --update npm
-RUN node -v
-RUN npm -v
-RUN cd / && npm install find
+# Install Flask
+RUN pip install flask
 
 WORKDIR /wmbusmeters
 COPY --from=build /wmbusmeters/build/wmbusmeters /wmbusmeters/wmbusmeters
