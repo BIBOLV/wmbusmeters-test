@@ -57,7 +57,7 @@ chmod a+x /wmbusmeters/mosquitto_pub.sh
 /mqtt_discovery.sh ${pub_args[@]} -c $CONFIG_PATH -w $CONFIG_DATA_PATH || true
 
 bashio::log.info "Starting bridge service."
-npm run start
+python3 /flask/app.py &
 
 echo "Running wmbusmeters ..."
 /wmbusmeters/wmbusmeters --useconfig=$CONFIG_DATA_PATH
