@@ -21,33 +21,23 @@
       "config:rw"
     ],
     "options": {
-        "device": "auto:c1,t1",
-        "shell": "/wmbusmeters/mosquitto_pub.sh wmbusmeters/$METER_NAME \"$METER_JSON\"",
-        "donotprobe": "/dev/ttyAMA0",
-        "loglevel": "normal",
-        "logtelegrams": "false",
-        "format": "json",
-        "enable_mqtt_discovery": "false",
-        "meters": [],
         "data_path": "/config/wmbusmeters",
-        "logfile": "/dev/stdout"
+        "enable_mqtt_discovery": false,
+        "conf":
+            "loglevel=normal\ndevice=auto:t1\ndonotprobe=/dev/ttyAMA0\nlogtelegrams=false\nformat=json\nlogfile=/dev/stdout\nshell=/wmbusmeters/mosquitto_pub.sh \"wmbusmeters/$METER_NAME\" \"$METER_JSON\"",
+        "meters": [],
+        "mqtt": {}
     },
     "schema": {
-        "device": "str",
-        "shell": "str",
-        "data_path": "str?",
-        "donotprobe": "str?",
-        "logfile": "str?",
-        "loglevel": "list(normal|verbose|debug)",
-        "logtelegrams": "list(true|false)",
-        "format": "list(json|fields|hr)",
+        "data_path": "str",
         "enable_mqtt_discovery": "bool?",
-        "meters": [ "str" ],
         "mqtt": {
           "host": "str?",
           "port": "port?",
           "user": "str?",
           "password": "str?"
-        }
+        },
+        "conf": "str",
+        "meters": [ "str" ]
     }
 }
