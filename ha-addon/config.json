@@ -1,6 +1,6 @@
 {
     "name": "Wmbusmeters (W-MBus to MQTT)",
-    "version": "0.2.44",
+    "version": "0.2.45",
     "slug": "wmbusmeters",
     "description": "Acquire utility meter readings using the wireless mbus protocol (WMBUS)",
     "arch": ["armv7", "aarch64", "amd64"],
@@ -9,7 +9,6 @@
     "startup": "application",
     "boot": "auto",
     "ingress": "true",
-    "ingress_entry": "index.html",
     "devices": ["/dev/ttyUSB0", "/dev/ttyAMA0"],
     "usb": true,
     "uart": true,
