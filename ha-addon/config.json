@@ -1,6 +1,6 @@
 {
     "name": "Wmbusmeters (W-MBus to MQTT)",
-    "version": "0.2.46",
+    "version": "0.2.47",
     "slug": "wmbusmeters",
     "description": "Acquire utility meter readings using the wireless mbus protocol (WMBUS)",
     "arch": ["armv7", "aarch64", "amd64"],
@@ -13,8 +13,8 @@
     "usb": true,
     "uart": true,
     "ports": {
-      "9011/udp": null,
-      "9022/tcp": null
+      "9011/udp": 9011,
+      "9022/tcp": 9022
     },
     "ports_description": {
       "9011/udp": "Netcat udp-listen port",
