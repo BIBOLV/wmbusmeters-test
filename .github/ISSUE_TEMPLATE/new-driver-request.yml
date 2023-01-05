@@ -1,6 +1,5 @@
 name: Request for new device support
 description: This is the ticket to create if you have currently unsuported meter and want to add support for it
-title: ""
 labels: ["New device support"]
 body:
   - type: markdown
