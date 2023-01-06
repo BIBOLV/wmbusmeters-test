@@ -1,11 +1,20 @@
-name: Request for new device support
-description: This is the ticket to create if you have currently unsuported meter and want to add support for it
-labels: ["New device support"]
+name: Ticket concerning device support
+description: This is the ticket to create for anything related to meter drivers
+labels: ["device support"]
 body:
   - type: markdown
     attributes:
-      value: |
-        Thanks for taking the time to fill out this request! 
+      value: Thanks for taking the time to fill out this request!
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Type of request
+      description: Pick the type of request
+      options:
+        - New device support
+        - Existing device improvement
+    validations:
+      required: true
   - type: textarea
     id: descriptiom
     attributes:
