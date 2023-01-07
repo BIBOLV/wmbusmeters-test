@@ -1,5 +1,3 @@
-FROM alpine:latest
-RUN if [ "$TARGETARCH" = "arm" ] ; then ENV TARGETARCH="armhf"; fi
 FROM multiarch/alpine:${TARGETARCH}-latest-stable as build
 RUN apk add --no-cache alpine-sdk gcc linux-headers ncurses-dev librtlsdr-dev cmake libusb-dev bash
 RUN git clone https://github.com/weetmuts/wmbusmeters.git && \
