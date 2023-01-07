@@ -40,7 +40,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: docker/
-          platforms: linux/armv6
+          platforms: linux/armhf
           push: true
           tags: bibolv/wmbusmeters:latest
       -
