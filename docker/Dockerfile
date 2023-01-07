@@ -1,4 +1,3 @@
-RUN echo "args - BUILDPLATFORM - $BUILDPLATFORM - BUILDOS - $BUILDOS - BUILDARCH - $BUILDARCH - BUILDVARIANT - $BUILDVARIANT - TARGETPLATFORM - $TARGETPLATFORM - TARGETOS - $TARGETOS - TARGETARCH - $TARGETARCH - TARGETVARIANT - $TARGETVARIANT"
 RUN if [ "$TARGETARCH" = "arm" ] ; then ENV TARGETARCH="armhf"; fi
 FROM multiarch/alpine:${TARGETARCH}-latest-stable AS build
 RUN apk add --no-cache alpine-sdk gcc linux-headers ncurses-dev librtlsdr-dev cmake libusb-dev bash
