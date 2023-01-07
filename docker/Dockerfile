@@ -1,6 +1,6 @@
 FROM alpine:latest
-RUN echo "args - BUILDPLATFORM - $BUILDPLATFORM - BUILDOS - $BUILDOS - BUILDARCH - $BUILDARCH - BUILDVARIANT - $BUILDVARIANT - TARGETPLATFORM - $TARGETPLATFORM - TARGETOS - $TARGETOS - TARGETARCH - $TARGETARCH - TARGETVARIANT - $TARGETVARIANT"
 RUN if [ "$TARGETARCH" = "arm" ] ; then ARG TARGETARCH="armhf"; fi
+FROM multiarch/alpine:${TARGETARCH}-latest-stable as build
 RUN apk add --no-cache alpine-sdk gcc linux-headers ncurses-dev librtlsdr-dev cmake libusb-dev bash
 RUN git clone https://github.com/weetmuts/wmbusmeters.git && \
     git clone https://github.com/weetmuts/rtl-wmbus.git && \
