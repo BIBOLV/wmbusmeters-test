@@ -3,29 +3,22 @@ name: Build HA add-on
 on:
   push:
     branches:
-      - ha-docker
+      - 'master'
+    tags:
+      - '[0-9]+\.[0-9]+\.[0-9]+'
+      - '[0-9]+\.[0-9]+\.[0-9]+-RC[0-9]+'
 
 jobs:
-  build:
+  docker:
     runs-on: ubuntu-latest
-    name: Build ${{ matrix.arch }} ${{ matrix.addon }} add-on
-    strategy:
-      matrix:
-        addon: ["wmbusmeters"]
-        arch: ["armv7", "aarch64", "amd64"]
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2.4.0
+      -
+        name: Checkout
+        uses: actions/checkout@v3
       - run: git fetch --prune --unshallow
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1.12.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASS }}
-
-      - name: Get version
+	  
+      - 
+        name: Get version
         id: version
         run: |
           if [ -n "$(git describe --tags | grep -)" ]; then
@@ -35,11 +28,53 @@ jobs:
             GIT_VER="$(git describe --tags)"
             echo "::set-output name=id::$(echo "$GIT_VER")"
           fi
-
-      - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
+      -
+        name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: weetmuts/wmbusmeters
+          tags: type=ref,event=tag
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      -
+        name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASS }}
+      -
+        name: Build and push not tagged release
+        if: ${{ !steps.meta.outputs.tags }}
         uses: home-assistant/builder@master
         with:
+          context: ha-addon/
+          platforms: linux/amd64,linux/arm64,linux/armhf
+          push: true
+          tags: bibolv/ha-addon-wmbusmeters:latest
           args: |
             --${{ matrix.arch }} \
             --target /data/ha-addon \
             --version ${{ steps.version.outputs.id }}
+      -
+        name: Build and push candidate
+        if: ${{ steps.meta.outputs.tags && contains(steps.meta.outputs.tags, '-RC') }}
+        uses: docker/build-push-action@v3
+        with:
+          context: docker/
+          platforms: linux/amd64,linux/arm64,linux/armhf
+          push: true
+          tags: weetmuts/wmbusmeters:candidate-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+      -
+        name: Build and push tagged release
+        if: ${{ steps.meta.outputs.tags && !contains(steps.meta.outputs.tags, '-RC') }}
+        uses: docker/build-push-action@v3
+        with:
+          context: docker/
+          platforms: linux/amd64,linux/arm64,linux/armhf
+          push: true
+          tags: weetmuts/wmbusmeters:release-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
