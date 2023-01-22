@@ -16,7 +16,6 @@ jobs:
         name: Checkout
         uses: actions/checkout@v3
       - run: git fetch --prune --unshallow
-      
       - 
         name: Get version
         id: version
