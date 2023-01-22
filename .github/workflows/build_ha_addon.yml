@@ -3,7 +3,7 @@ name: Build HA add-on
 on:
   push:
     branches:
-      - master
+      - ha-docker
 
 jobs:
   build:
