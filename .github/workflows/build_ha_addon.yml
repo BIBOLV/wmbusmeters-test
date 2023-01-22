@@ -1,0 +1,45 @@
+name: Build HA add-on
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build ${{ matrix.arch }} ${{ matrix.addon }} add-on
+    strategy:
+      matrix:
+        addon: ["wmbusmeters"]
+        arch: ["armv7", "aarch64", "amd64"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2.4.0
+      - run: git fetch --prune --unshallow
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1.12.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "$(git describe --tags | grep -)" ]; then
+            GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
+            echo "::set-output name=id::$(echo "$GIT_VER")"
+          else
+            GIT_VER="$(git describe --tags)"
+            echo "::set-output name=id::$(echo "$GIT_VER")"
+          fi
+
+      - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --${{ matrix.arch }} \
+            --target /data/ha-addon \
+            --version ${{ steps.version.outputs.id }}
