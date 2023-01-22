@@ -56,7 +56,6 @@ jobs:
           push: true
           tags: bibolv/ha-addon-wmbusmeters:latest
           args: |
-            --${{ matrix.arch }} \
             --target /data/ha-addon \
             --version ${{ steps.version.outputs.id }}
       -
