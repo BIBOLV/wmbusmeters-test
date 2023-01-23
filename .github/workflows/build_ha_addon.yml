@@ -6,14 +6,7 @@ on:
       - ha-docker
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    name: Build ${{ matrix.arch }} ${{ matrix.addon }} add-on
-    strategy:
-      matrix:
-        addon: ["wmbusmeters"]
-        arch: ["armv7", "aarch64", "amd64"]
-
+  prepare:
     steps:
       - name: Check out repository
         uses: actions/checkout@v2.4.0
@@ -40,6 +33,14 @@ jobs:
         run: |
           sed -i "s/    \"version\".*/    \"version\": \"$steps.version.outputs.id\"\,/g" ha-addon/config.json
           cat README.md
+
+  build:
+    runs-on: ubuntu-latest
+    name: Build ${{ matrix.arch }} ${{ matrix.addon }} add-on
+    strategy:
+      matrix:
+        addon: ["wmbusmeters"]
+        arch: ["armv7", "aarch64", "amd64"]
 
       - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
         uses: home-assistant/builder@master
