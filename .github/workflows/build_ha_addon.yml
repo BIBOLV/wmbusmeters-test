@@ -7,6 +7,7 @@ on:
 
 jobs:
   prepare:
+    runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v2.4.0
@@ -31,7 +32,7 @@ jobs:
 
       - name: Update README and set version in config.json
         run: |
-          sed -i "s/    \"version\".*/    \"version\": \"$steps.version.outputs.id\"\,/g" ha-addon/config.json
+          sed -i "s/\s\{4,\}\"version\".*/    \"version\": \"${{ steps.version.outputs.id }}\"\,/g" ha-addon/config.json
           cat README.md
 
   build:
@@ -41,7 +42,7 @@ jobs:
       matrix:
         addon: ["wmbusmeters"]
         arch: ["armv7", "aarch64", "amd64"]
-
+    steps: 
       - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
         uses: home-assistant/builder@master
         with:
@@ -50,6 +51,9 @@ jobs:
             --target /data/ha-addon \
             --version ${{ steps.version.outputs.id }}
 
+  update-repo:
+    runs-on: ubuntu-latest
+    steps:
       - name: Push changed files back to repo
         run: |
           git config user.name github-actions[bot]
