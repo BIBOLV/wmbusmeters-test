@@ -29,6 +29,7 @@ jobs:
             GIT_VER="$(git describe --tags)"
             echo "::set-output name=id::$(echo "$GIT_VER")"
           fi
+        
 
       - name: Update README and set version in config.json
         run: |
@@ -40,6 +41,8 @@ jobs:
           name: ha-addon_artifact-${{ steps.version.outputs.id }}
           path: ${{ github.workspace }}
           retention-days: 1
+    outputs:
+      id: ${{ steps.version.outputs.id }}
 
   build:
     needs: prepare
@@ -52,7 +55,7 @@ jobs:
     steps: 
       - uses: actions/download-artifact@v2
         with:
-          name: ha-addon_artifact-${{ needs.version.outputs.id }}
+          name: ha-addon_artifact-${{ needs.prepare.outputs.id }}
 
       - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
         uses: home-assistant/builder@master
@@ -60,7 +63,7 @@ jobs:
           args: |
             --${{ matrix.arch }} \
             --target /data/ha-addon \
-            --version ${{ needs.version.outputs.id }}
+            --version ${{ needs.prepare.outputs.id }}
 
   update-repo:
     needs: [prepare, build]
@@ -68,7 +71,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v2
         with:
-          name: ha-addon_artifact-${{ needs.version.outputs.id }}
+          name: ha-addon_artifact-${{ needs.prepare.outputs.id }}
 
       - name: Push changed files back to repo
         run: |
