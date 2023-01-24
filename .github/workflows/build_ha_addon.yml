@@ -33,9 +33,10 @@ jobs:
       - name: Update README and set version in config.json
         run: |
           sed -i "s/\s\{4,\}\"version\".*/    \"version\": \"${{ steps.version.outputs.id }}\"\,/g" ha-addon/config.json
-          cat README.md
+          cat ha-addon/config.json
 
   build:
+    needs: prepare
     runs-on: ubuntu-latest
     name: Build ${{ matrix.arch }} ${{ matrix.addon }} add-on
     strategy:
@@ -52,6 +53,7 @@ jobs:
             --version ${{ steps.version.outputs.id }}
 
   update-repo:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Push changed files back to repo
