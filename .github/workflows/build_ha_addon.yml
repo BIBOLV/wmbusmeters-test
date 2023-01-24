@@ -35,6 +35,12 @@ jobs:
           sed -i "s/\s\{4,\}\"version\".*/    \"version\": \"${{ steps.version.outputs.id }}\"\,/g" ha-addon/config.json
           cat ha-addon/config.json
 
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ha-addon_artifact-${{ GIT_VER }}
+          path: ${{ github.workspace }}
+          retention-days: 1
+
   build:
     needs: prepare
     runs-on: ubuntu-latest
@@ -44,6 +50,10 @@ jobs:
         addon: ["wmbusmeters"]
         arch: ["armv7", "aarch64", "amd64"]
     steps: 
+      - uses: actions/download-artifact@v2
+        with:
+          name: ha-addon_artifact-${{ GIT_VER }}
+
       - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
         uses: home-assistant/builder@master
         with:
@@ -56,6 +66,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: ha-addon_artifact-${{ GIT_VER }}
+
       - name: Push changed files back to repo
         run: |
           git config user.name github-actions[bot]
