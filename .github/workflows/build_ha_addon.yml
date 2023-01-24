@@ -37,7 +37,7 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: ha-addon_artifact-${{ version.GIT_VER }}
+          name: ha-addon_artifact-${{ steps.version.outputs.id }}
           path: ${{ github.workspace }}
           retention-days: 1
 
@@ -52,7 +52,7 @@ jobs:
     steps: 
       - uses: actions/download-artifact@v2
         with:
-          name: ha-addon_artifact-${{ version.GIT_VER }}
+          name: ha-addon_artifact-${{ steps.version.outputs.id }}
 
       - name: Build ${{ matrix.addon }} ${{ matrix.arch }} HA add-on
         uses: home-assistant/builder@master
@@ -68,7 +68,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v2
         with:
-          name: ha-addon_artifact-${{ version.GIT_VER }}
+          name: ha-addon_artifact-${{ steps.version.outputs.id }}
 
       - name: Push changed files back to repo
         run: |
