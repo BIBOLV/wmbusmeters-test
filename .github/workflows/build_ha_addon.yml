@@ -25,9 +25,10 @@ jobs:
           if [ -n "$(git describe --tags | grep -)" ]; then
             GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
             echo "::set-output name=id::$(echo "$GIT_VER")"
+            run: echo "id=$GIT_VER" >> $GITHUB_OUTPUT
           else
             GIT_VER="$(git describe --tags)"
-            echo "::set-output name=id::$(echo "$GIT_VER")"
+            run: echo "id=$GIT_VER" >> $GITHUB_OUTPUT
           fi
         
 
@@ -41,8 +42,6 @@ jobs:
           name: ha-addon_artifact-${{ steps.version.outputs.id }}
           path: ${{ github.workspace }}
           retention-days: 1
-    outputs:
-      id: ${{ steps.version.outputs.id }}
 
   build:
     needs: prepare
