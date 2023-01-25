@@ -24,10 +24,10 @@ jobs:
         run: |
           if [ -n "$(git describe --tags | grep -)" ]; then
             GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
-            echo "id={GIT_VER}" >> $GITHUB_OUTPUT
+            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
           else
             GIT_VER="$(git describe --tags)"
-            echo "id={GIT_VER}" >> $GITHUB_OUTPUT
+            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
           fi
 
       - name: Update README and set version in config.json
