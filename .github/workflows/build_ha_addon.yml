@@ -28,7 +28,7 @@ jobs:
         run: |
           sed -i "s/\s\{4,\}\"version\".*/    \"version\": \"${{ steps.version.outputs.id }}\"\,/g" ha-addon/config.json
           cat ha-addon/config.json
-          echo -e "## ${{ steps.version.outputs.id }} \n- ${{ github.event.pull_request.title }} - ${{ github.event.pull_request.body }}\n" >> ha-addon/CHANGELOG.md
+          sed -i '1s/^/## ${{ steps.version.outputs.id }} \n- ${{ github.event.head_commit.message }} - ${{ github.event.pull_request.body }}\n/' ha-addon/CHANGELOG.md
           cat ha-addon/CHANGELOG.md
 
       - uses: actions/upload-artifact@v3
