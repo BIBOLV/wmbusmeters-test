@@ -45,7 +45,7 @@ jobs:
     strategy:
       matrix:
         addon: ["wmbusmeters"]
-        arch: ["armv7", "aarch64", "amd64"]
+        arch: ["amd64"] # , "armv7", "aarch64"]
     steps: 
       - uses: actions/download-artifact@v3
         with:
@@ -75,8 +75,8 @@ jobs:
 
       - name: Push changed files back to repo
         run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
           git add -A
           git commit -m "Auto Push - update ha-addon config and readme - [no ci]"
           git push
