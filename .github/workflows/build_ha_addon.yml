@@ -29,7 +29,8 @@ jobs:
           sed -i "s/\s\{4,\}\"version\".*/    \"version\": \"${{ steps.version.outputs.id }}\"\,/g" ha-addon/config.json
           cat ha-addon/config.json
           details=$(echo "${{ github.event.head_commit.message }}")
-          sed -i '1s/^/## ${{ steps.version.outputs.id }} \n- ${details//$'\n'/'\\n'}\n/' ha-addon/CHANGELOG.md
+          details2=$(echo "${{ details//$'\n'/'\\n' }}")
+          sed -i '1s/^/## ${{ steps.version.outputs.id }} \n- ${{ details//$'\n'/'\\n' }}\n/' ha-addon/CHANGELOG.md
           cat ha-addon/CHANGELOG.md
 
       - uses: actions/upload-artifact@v3
