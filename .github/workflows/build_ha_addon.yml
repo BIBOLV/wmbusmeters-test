@@ -28,6 +28,8 @@ jobs:
         run: |
           sed -i "s/\s\{4,\}\"version\".*/    \"version\": \"${{ steps.version.outputs.id }}\"\,/g" ha-addon/config.json
           cat ha-addon/config.json
+          echo -e "## ${{ steps.version.outputs.id }} \n- ${{ github.event.pull_request.title }} - ${{ github.event.pull_request.body }}\n" >> ha-addon/CHANGELOG.md
+          cat ha-addon/CHANGELOG.md
 
       - uses: actions/upload-artifact@v3
         with:
@@ -79,8 +81,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git remote rm origin
           git remote add origin https://github.com/BIBOLV/wmbusmeters.git
-          git config ha-docker.remote origin
-          git config ha-docker.merge refs/heads/ha-docker
           git add -A
           git commit -m "Auto Push - update ha-addon config and readme - [no ci]"
-          git push
+          git push --set-upstream origin ha-docker
