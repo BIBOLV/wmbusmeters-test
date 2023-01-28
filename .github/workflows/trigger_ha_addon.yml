@@ -12,17 +12,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Get wmbusmeters version
-        id: version
-        run: |
-          if [ -n "$(git describe --tags | grep -)" ]; then
-            GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
-            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
-          else
-            GIT_VER="$(git describe --tags)"
-            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Get wmbusmeters meta data
         id: meta
         uses: docker/metadata-action@v4
@@ -37,7 +26,7 @@ jobs:
           token: ${{ secrets.HA_PAT }}
           repository: BIBOLV/wmbusmeters-ha-addon
           event-type: build_ha_edge
-          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
+          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"}'
 
       - name: Trigger build for stable release
         if: ${{ steps.meta.outputs.tags }}
@@ -46,4 +35,4 @@ jobs:
           token: ${{ secrets.HA_PAT }}
           repository: BIBOLV/wmbusmeters-ha-addon
           event-type: build_ha_stable
-          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
+          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"}'
