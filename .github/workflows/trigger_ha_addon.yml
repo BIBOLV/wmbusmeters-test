@@ -15,4 +15,4 @@ jobs:
           token: ${{ secrets.HA_PAT }}
           repository: BIBOLV/wmbusmeters-ha-addon
           event-type: build_ha_edge
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"}'
