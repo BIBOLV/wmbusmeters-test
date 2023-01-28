@@ -20,7 +20,6 @@ jobs:
           tags: type=ref,event=tag
 
       - name: Trigger build for edge release
-        if: ${{ !steps.meta.outputs.tags }}
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.HA_PAT }}
@@ -29,7 +28,6 @@ jobs:
           client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels[\'org.opencontainers.image.version\'] }}"}'
 
       - name: Trigger build for stable release
-        if: ${{ steps.meta.outputs.tags }}
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.HA_PAT }}
