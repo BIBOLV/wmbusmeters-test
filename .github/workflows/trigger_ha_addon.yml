@@ -1,0 +1,18 @@
+name: Trigger HA add-on build
+
+on:
+  push:
+    branches:
+      - ha-docker
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Repository Dispatch event
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HA_PAT }}
+          repository: BIBOLV/wmbusmeters-ha-addon
+          event-type: build_ha
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
