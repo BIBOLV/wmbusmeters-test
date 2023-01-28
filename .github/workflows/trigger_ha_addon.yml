@@ -15,4 +15,4 @@ jobs:
           token: ${{ secrets.HA_PAT }}
           repository: BIBOLV/wmbusmeters-ha-addon
           event-type: build_ha
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+          client-payload: '{"github": ${{ toJson(github) }}}'
