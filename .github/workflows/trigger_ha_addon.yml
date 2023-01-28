@@ -26,7 +26,7 @@ jobs:
           token: ${{ secrets.HA_PAT }}
           repository: BIBOLV/wmbusmeters-ha-addon
           event-type: build_ha_edge
-          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"}'
+          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels[\'org.opencontainers.image.version\'] }}"}'
 
       - name: Trigger build for stable release
         if: ${{ steps.meta.outputs.tags }}
@@ -35,4 +35,4 @@ jobs:
           token: ${{ secrets.HA_PAT }}
           repository: BIBOLV/wmbusmeters-ha-addon
           event-type: build_ha_stable
-          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"}'
+          client-payload: '{"ver": "${{ fromJSON(steps.meta.outputs.json).labels[\'org.opencontainers.image.version\'] }}"}'
