@@ -8,7 +8,7 @@ on:
       - '*.*.*'
 
 jobs:
-  trigger_ha_build:
+  trigger_ha_addon_build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
