@@ -6,14 +6,14 @@ on:
       - master
 
 jobs:
-  trigger:
+  trigger_ha_build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v2.4.0
       - run: git fetch --prune --unshallow
 
-      - name: Get version
+      - name: Get wmbusmeters version
         id: version
         run: |
           if [ -n "$(git describe --tags | grep -)" ]; then
@@ -24,4 +24,27 @@ jobs:
             echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
           fi
 
-      - run: echo "${{ steps.version.outputs.id }}"
+      - name: Get wmbusmeters meta data
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: BIBOLV/wmbusmeters
+          tags: type=ref,event=tag
+
+      - name: Trigger build for edge release
+        if: ${{ !steps.meta.outputs.tags }}
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HA_PAT }}
+          repository: BIBOLV/wmbusmeters-ha-addon
+          event-type: build_ha_edge
+          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
+
+      - name: Trigger build for stable release
+        if: ${{ steps.meta.outputs.tags }}
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HA_PAT }}
+          repository: BIBOLV/wmbusmeters-ha-addon
+          event-type: build_ha_stable
+          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
