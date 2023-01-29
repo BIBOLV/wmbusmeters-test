@@ -9,18 +9,21 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - id: get_version
-        uses: battila7/get-version-action@v2
-      - run: echo ${{ steps.get_version.outputs.version }}
-      - run: echo ${{ steps.get_version.outputs.version-without-v }}
-      - run: echo ${{ steps.get_version.outputs.patch }}
-      - run: echo ${{ steps.get_version.outputs.prerelease }}
-      - run: echo ${{ steps.get_version.outputs.build }}
+      - name: Check out repository
+        uses: actions/checkout@v2.4.0
+      - run: git fetch --prune --unshallow
 
-      - name: Trigger build for edge release
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.HA_PAT }}
-          repository: BIBOLV/wmbusmeters-ha-addon
-          event-type: build_ha_edge
-          client-payload: '{"github": ${{ toJson(github) }}}'
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "$(git describe --tags | grep -)" ]; then
+            GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
+            echo "::set-output name=id::$(echo "$GIT_VER")"
+          else
+            GIT_VER="$(git describe --tags)"
+            echo "::set-output name=id::$(echo "$GIT_VER")"
+          fi
+
+      - run: echo "${{ steps.version.outputs.id }}"
+
+      - run: echo "${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"
