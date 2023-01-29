@@ -13,5 +13,7 @@ jobs:
     steps:
       - uses: mukunku/tag-exists-action@v1.2.0
         id: checkTag
+        with:
+          tag: ${{ github.event.inputs.version }}
 
       - run: echo ${{ steps.checkTag.outputs.exists }}
