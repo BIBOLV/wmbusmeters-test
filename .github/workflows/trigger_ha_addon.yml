@@ -11,4 +11,7 @@ jobs:
   trigger_ha_build:
     runs-on: ubuntu-latest
     steps:
-      - run: echo ${{ github.event.release.tag_name }}
+     - name: GitHub Tag Name example
+       run: |
+         echo "Tag name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
+         echo "Tag name from github.ref_name: ${{  github.ref_name }}"
