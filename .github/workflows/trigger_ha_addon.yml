@@ -9,9 +9,13 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: ID output
-        run: |
-          echo "${{ github.event.pull_request.number }}"
+      - id: get_version
+        uses: battila7/get-version-action@v2
+      - run: echo ${{ steps.get_version.outputs.version }}
+      - run: echo ${{ steps.get_version.outputs.version-without-v }}
+      - run: echo ${{ steps.get_version.outputs.patch }}
+      - run: echo ${{ steps.get_version.outputs.prerelease }}
+      - run: echo ${{ steps.get_version.outputs.build }}
 
       - name: Trigger build for edge release
         uses: peter-evans/repository-dispatch@v2
