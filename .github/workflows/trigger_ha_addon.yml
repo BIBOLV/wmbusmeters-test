@@ -11,9 +11,4 @@ jobs:
   trigger_ha_build:
     runs-on: ubuntu-latest
     steps:
-      - uses: mukunku/tag-exists-action@v1.2.0
-        id: checkTag
-        with:
-          tag: ${{ github.event.inputs.version }}
-
-      - run: echo ${{ steps.checkTag.outputs.exists }}
+      - run: echo ${{ github.event.release.tag_name }}
