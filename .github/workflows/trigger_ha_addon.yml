@@ -9,6 +9,10 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
+      - name: ID output
+        run: |
+          echo "${{ github.event.pull_request.number }}"
+
       - name: Trigger build for edge release
         uses: peter-evans/repository-dispatch@v2
         with:
