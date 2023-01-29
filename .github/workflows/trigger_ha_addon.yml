@@ -11,14 +11,35 @@ jobs:
   trigger_ha_build:
     runs-on: ubuntu-latest
     steps:
-     - name: GitHub Tagged Name example
-       if: ${{ github.ref_name == 'master' }}
-       run: |
-         echo "Tagged name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
-         echo "Tagged name from github.ref_name: ${{  github.ref_name }}"
+      - name: Check out repository
+        uses: actions/checkout@v2.4.0
+      - run: git fetch --prune --unshallow
 
-     - name: GitHub Tag Name example
-       if: ${{ github.ref_name != 'master' }}
-       run: |
-         echo "Tag not name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
-         echo "Tag not name from github.ref_name: ${{  github.ref_name }}"
+      - name: Get wmbusmeters version
+        id: version
+        run: |
+          if [ -n "$(git describe --tags | grep -)" ]; then
+            GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
+            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
+          else
+            GIT_VER="$(git describe --tags)"
+            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger build for edge release
+        if: ${{ github.ref_name == 'master' }}
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HA_PAT }}
+          repository: BIBOLV/wmbusmeters-ha-addon
+          event-type: build_ha_edge
+          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
+
+      - name: Trigger build for stable release
+        if: ${{ github.ref_name != 'master' }}
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HA_PAT }}
+          repository: BIBOLV/wmbusmeters-ha-addon
+          event-type: build_ha_stable
+          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
