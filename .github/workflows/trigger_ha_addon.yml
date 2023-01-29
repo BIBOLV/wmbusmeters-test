@@ -3,7 +3,7 @@ name: Trigger HA add-on build
 on:
   push:
     branches:
-      - ha-docker
+      - master
 
 jobs:
   trigger:
