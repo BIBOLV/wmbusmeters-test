@@ -1,0 +1,22 @@
+name: Trigger HA add-on build
+
+on:
+  push:
+    branches:
+      - ha-docker
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ID output
+        run: |
+          echo "${{ github.event.pull_request.number }}"
+
+      - name: Trigger build for edge release
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HA_PAT }}
+          repository: BIBOLV/wmbusmeters-ha-addon
+          event-type: build_ha_edge
+          client-payload: '{"github": ${{ toJson(github) }}}'
