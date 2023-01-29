@@ -11,7 +11,14 @@ jobs:
   trigger_ha_build:
     runs-on: ubuntu-latest
     steps:
-     - name: GitHub Tag Name example
+     - name: GitHub Tagged Name example
+       if: ${{ github.ref_name == 'master' }}
        run: |
-         echo "Tag name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
-         echo "Tag name from github.ref_name: ${{  github.ref_name }}"
+         echo "Tagged name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
+         echo "Tagged name from github.ref_name: ${{  github.ref_name }}"
+
+     - name: GitHub Tag Name example
+       if: ${{ github.ref_name != 'master' }}
+       run: |
+         echo "Tag not name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
+         echo "Tag not name from github.ref_name: ${{  github.ref_name }}"
