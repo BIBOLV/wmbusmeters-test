@@ -9,42 +9,7 @@ jobs:
   trigger_ha_build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2.4.0
-      - run: git fetch --prune --unshallow
+      - uses: mukunku/tag-exists-action@v1.2.0
+        id: checkTag
 
-      - name: Get wmbusmeters version
-        id: version
-        run: |
-          if [ -n "$(git describe --tags | grep -)" ]; then
-            GIT_VER="$(git describe --tags | cut -f1,2 -d'-')"
-            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
-          else
-            GIT_VER="$(git describe --tags)"
-            echo "id=${GIT_VER}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get wmbusmeters meta data
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: BIBOLV/wmbusmeters
-          tags: type=ref,event=tag
-
-      - name: Trigger build for edge release
-        if: ${{ !steps.meta.outputs.tags }}
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.HA_PAT }}
-          repository: BIBOLV/wmbusmeters-ha-addon
-          event-type: build_ha_edge
-          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
-
-      - name: Trigger build for stable release
-        if: ${{ steps.meta.outputs.tags }}
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.HA_PAT }}
-          repository: BIBOLV/wmbusmeters-ha-addon
-          event-type: build_ha_stable
-          client-payload: '{"ver": "${{ steps.version.outputs.id }}"}'
+      - run: echo ${{ steps.checkTag.outputs.exists }}
