@@ -66,11 +66,11 @@
         },
         "meters": [
           {
-            "match([^\n]+)",
-            "match([^\n]+)",
-            "match([^\n]+)",
-            "match([^\n]+)",
-            "match([^\n]+)"
+            "match([^\n]+)": "str?",
+            "match([^\n]+)": "str?",
+            "match([^\n]+)": "str?",
+            "match([^\n]+)": "str?",
+            "match([^\n]+)": "str?"
           }
         ]
     }
