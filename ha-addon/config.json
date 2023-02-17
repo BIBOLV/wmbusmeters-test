@@ -46,31 +46,5 @@
           },
         "mqtt": {}
     },
-    "schema": {
-        "data_path": "str",
-        "enable_mqtt_discovery": "bool?",
-        "mqtt": {
-          "host": "str?",
-          "port": "port?",
-          "user": "str?",
-          "password": "str?"
-        },
-        "conf": {
-          "loglevel": "str",
-          "device": "str",
-          "donotprobe": "str?",
-          "logtelegrams": "bool?",
-          "format": "str",
-          "logfile": "str",
-          "shell": "str"
-        },
-        "meters": [
-          {
-            "name": "str?",
-            "driver": "str?",
-            "id": "str?",
-            "key": "str?"
-          }
-        ]
-    }
+    "schema": false
 }
