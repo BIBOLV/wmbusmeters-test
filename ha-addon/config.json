@@ -1,6 +1,6 @@
 {
     "name": "Wmbusmeters (W-MBus to MQTT)",
-    "version": "1.11.0-5",
+    "version": "1.11.0-6",
     "slug": "wmbusmeters",
     "description": "Acquire utility meter readings using the wireless mbus protocol (WMBUS)",
     "arch": ["armv7", "aarch64", "amd64"],
@@ -62,15 +62,17 @@
           "logtelegrams": "bool?",
           "format": "str",
           "logfile": "str",
-          "shell": "str"
+          "shell": "str",
+          "str": "str?",
+          "str": "str?"
         },
         "meters": [
           {
-            "str?": "str?",
-            "str?": "str?",
-            "str?": "str?",
-            "str?": "str?",
-            "str?": "str?"
+            "name": "str?",
+            "driver": "str?",
+            "id": "str?",
+            "key": "str?",
+            "str": "str?"
           }
         ]
     }
