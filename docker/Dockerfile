@@ -1,4 +1,4 @@
-FROM multiarch/alpine:${TARGETARCH}${TARGETVARIANT}-latest-stable AS build
+FROM asymworks/multiarch-alpine:${TARGETARCH}${TARGETVARIANT}-latest-stable AS build
 RUN apk add --no-cache alpine-sdk gcc linux-headers librtlsdr-dev libxml2-dev cmake libusb-dev bash
 RUN git clone https://github.com/wmbusmeters/wmbusmeters.git && \
     git clone https://github.com/weetmuts/rtl-wmbus.git && \
