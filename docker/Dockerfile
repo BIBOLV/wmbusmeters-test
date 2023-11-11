@@ -10,7 +10,7 @@ RUN make release && chmod 755 build/rtl_wmbus
 WORKDIR /rtl_433
 RUN mkdir build && cd build && cmake ../ && make
 
-FROM multiarch/alpine:${TARGETARCH}${TARGETVARIANT}-latest-stable as scratch
+FROM asymworks/multiarch-alpine:${TARGETARCH}${TARGETVARIANT}-latest-stable as scratch
 ENV QEMU_EXECVE=1
 RUN apk add --no-cache mosquitto-clients libstdc++ curl libusb rtl-sdr libxml2 netcat-openbsd
 WORKDIR /wmbusmeters
