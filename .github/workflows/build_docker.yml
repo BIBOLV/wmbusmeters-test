@@ -42,7 +42,7 @@ jobs:
           context: docker/
           platforms: linux/amd64,linux/arm64,linux/armhf
           push: true
-          tags: BIBOLV/wmbusmeters:latest
+          tags: bibolv/wmbusmeters:latest
       -
         name: Build and push candidate
         if: ${{ steps.meta.outputs.tags && contains(steps.meta.outputs.tags, '-RC') }}
@@ -51,7 +51,7 @@ jobs:
           context: docker/
           platforms: linux/amd64,linux/arm64,linux/armhf
           push: true
-          tags: BIBOLV/wmbusmeters:candidate-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+          tags: bibolv/wmbusmeters:candidate-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
       -
         name: Build and push tagged release
         if: ${{ steps.meta.outputs.tags && !contains(steps.meta.outputs.tags, '-RC') }}
@@ -60,4 +60,4 @@ jobs:
           context: docker/
           platforms: linux/amd64,linux/arm64,linux/armhf
           push: true
-          tags: BIBOLV/wmbusmeters:release-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+          tags: bibolv/wmbusmeters:release-${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
