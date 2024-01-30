@@ -20,6 +20,8 @@
 #include"util.h"
 
 #include<assert.h>
+#include<cmath>
+#include<math.h>
 #include<memory.h>
 #include<limits>
 
@@ -121,7 +123,8 @@ bool isInsideVIFRange(Vif vif, VIFRange vif_range)
     {
         return
             isInsideVIFRange(vif, VIFRange::EnergyWh) ||
-            isInsideVIFRange(vif, VIFRange::EnergyMJ);
+            isInsideVIFRange(vif, VIFRange::EnergyMJ) ||
+            isInsideVIFRange(vif, VIFRange::EnergyMWh);
     }
     if (vif_range == VIFRange::AnyPowerVIF)
     {
@@ -252,6 +255,16 @@ bool parseDV(Telegram *t,
                 t->mfct_0f_index = 1+std::distance(data_start, data);
                 assert(t->mfct_0f_index >= 0);
                 t->addExplanationAndIncrementPos(data, datalen, KindOfData::CONTENT, Understanding::NONE, "%02X manufacturer specific data %s", dif, value.c_str());
+                break;
+            }
+            if (dif == 0x1f)
+            {
+                DEBUG_PARSER("(dvparser) reached dif %02x more records in next telegram.\n", dif);
+                datalen = std::distance(data,data_end);
+                string value = bin2hex(data+1, data_end, datalen-1);
+                t->mfct_0f_index = 1+std::distance(data_start, data);
+                assert(t->mfct_0f_index >= 0);
+                t->addExplanationAndIncrementPos(data, datalen, KindOfData::CONTENT, Understanding::FULL, "%02X more data in next telegram %s", dif, value.c_str());
                 break;
             }
             DEBUG_PARSER("(dvparser) reached unknown dif %02x treating remaining data as manufacturer specific, parsing is done.\n", dif);
@@ -760,6 +773,15 @@ bool checkSizeHex(size_t expected_len, DifVifKey &dvk, string &v)
     return false;
 }
 
+bool is_all_F(string &v)
+{
+    for (size_t i = 0; i < v.length(); ++i)
+    {
+        if (v[i] != 'F') return false;
+    }
+    return true;
+}
+
 bool DVEntry::extractDouble(double *out, bool auto_scale, bool assume_signed)
 {
     int t = dif_vif_key.dif() & 0xf;
@@ -847,10 +869,18 @@ bool DVEntry::extractDouble(double *out, bool auto_scale, bool assume_signed)
         t == 0xC || // 8 digit BCD
         t == 0xE)   // 12 digit BCD
     {
+        // Signed BCD values are always visible in bcd! Top nybble is f. We can force assume_signed to true.
+        assume_signed = true;
         // 74140000 -> 00001474
         string& v = value;
         uint64_t raw = 0;
         bool negate = false;
+
+        if (is_all_F(v))
+        {
+            *out = std::nan("");
+            return false;
+        }
         if (t == 0x9) {
             if (!checkSizeHex(2, dif_vif_key, v)) return false;
             if (assume_signed && v[0] == 'F') { negate = true; v[0] = '0'; }
@@ -1009,24 +1039,33 @@ bool DVEntry::extractLong(uint64_t *out)
     {
         // 74140000 -> 00001474
         string& v = value;
+        if (is_all_F(v))
+        {
+            return false;
+        }
         uint64_t raw = 0;
+        bool negate = false;
         if (t == 0x9) {
             if (!checkSizeHex(2, dif_vif_key, value)) return false;
+            if (v[0] == 'F') { negate = true; v[0] = '0'; }
             assert(v.size() == 2);
             raw = (v[0]-'0')*10 + (v[1]-'0');
         } else if (t ==  0xA) {
             if (!checkSizeHex(4, dif_vif_key, value)) return false;
+            if (v[2] == 'F') { negate = true; v[2] = '0'; }
             assert(v.size() == 4);
             raw = (v[2]-'0')*10*10*10 + (v[3]-'0')*10*10
                 + (v[0]-'0')*10 + (v[1]-'0');
         } else if (t ==  0xB) {
             if (!checkSizeHex(6, dif_vif_key, value)) return false;
+            if (v[4] == 'F') { negate = true; v[4] = '0'; }
             assert(v.size() == 6);
             raw = (v[4]-'0')*10*10*10*10*10 + (v[5]-'0')*10*10*10*10
                 + (v[2]-'0')*10*10*10 + (v[3]-'0')*10*10
                 + (v[0]-'0')*10 + (v[1]-'0');
         } else if (t ==  0xC) {
             if (!checkSizeHex(8, dif_vif_key, value)) return false;
+            if (v[6] == 'F') { negate = true; v[6] = '0'; }
             assert(v.size() == 8);
             raw = (v[6]-'0')*10*10*10*10*10*10*10 + (v[7]-'0')*10*10*10*10*10*10
                 + (v[4]-'0')*10*10*10*10*10 + (v[5]-'0')*10*10*10*10
@@ -1034,6 +1073,7 @@ bool DVEntry::extractLong(uint64_t *out)
                 + (v[0]-'0')*10 + (v[1]-'0');
         } else if (t ==  0xE) {
             if (!checkSizeHex(12, dif_vif_key, value)) return false;
+            if (v[10] == 'F') { negate = true; v[10] = '0'; }
             assert(v.size() == 12);
             raw =(v[10]-'0')*10*10*10*10*10*10*10*10*10*10*10 + (v[11]-'0')*10*10*10*10*10*10*10*10*10*10
                 + (v[8]-'0')*10*10*10*10*10*10*10*10*10 + (v[9]-'0')*10*10*10*10*10*10*10*10
@@ -1041,6 +1081,11 @@ bool DVEntry::extractLong(uint64_t *out)
                 + (v[4]-'0')*10*10*10*10*10 + (v[5]-'0')*10*10*10*10
                 + (v[2]-'0')*10*10*10 + (v[3]-'0')*10*10
                 + (v[0]-'0')*10 + (v[1]-'0');
+        }
+
+        if (negate)
+        {
+            raw = (uint64_t)(((int64_t)raw)*-1);
         }
 
         *out = raw;
@@ -1440,4 +1485,19 @@ const char *toString(DVEntryCounterType ct)
     }
 
     return "unknown";
+}
+
+string available_vif_ranges_;
+
+const string &availableVIFRanges()
+{
+    if (available_vif_ranges_ != "") return available_vif_ranges_;
+
+#define X(n,from,to,q,u) available_vif_ranges_ += string(#n) + "\n";
+LIST_OF_VIF_RANGES
+#undef X
+
+    // Remove last newline
+    available_vif_ranges_.pop_back();
+    return available_vif_ranges_;
 }

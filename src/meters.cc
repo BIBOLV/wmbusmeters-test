@@ -195,9 +195,10 @@ string loadDriver(const string &file)
     // Check that the driver name has not been registered before!
     if (lookupDriver(di.name().str()) != NULL)
     {
-        error("Cannot load driver %s %s since it is already registered!\n",
+        debug("Ignoring loaded driver %s %s since it is already registered!\n",
               di.name().str().c_str(),
               file.c_str());
+        return di.name().str();
     }
 
     // Check that no other driver also triggers on the same detection values.
@@ -271,7 +272,11 @@ MeterCommonImplementation::MeterCommonImplementation(MeterInfo &mi,
     }
     for (auto s : mi.shells)
     {
-        addShell(s);
+        addShellMeterUpdated(s);
+    }
+    for (auto s : mi.meter_shells)
+    {
+        addShellMeterAdded(s);
     }
     for (auto j : mi.extra_constant_fields)
     {
@@ -282,9 +287,14 @@ MeterCommonImplementation::MeterCommonImplementation(MeterInfo &mi,
     force_mfct_index_ = di.forceMfctIndex();
 }
 
-void MeterCommonImplementation::addShell(string cmdline)
+void MeterCommonImplementation::addShellMeterAdded(string cmdline)
 {
-    shell_cmdlines_.push_back(cmdline);
+    shell_cmdlines_added_.push_back(cmdline);
+}
+
+void MeterCommonImplementation::addShellMeterUpdated(string cmdline)
+{
+    shell_cmdlines_updated_.push_back(cmdline);
 }
 
 void MeterCommonImplementation::addExtraConstantField(string ecf)
@@ -337,9 +347,14 @@ void MeterCommonImplementation::addExtraCalculatedField(string ecf)
         );
 }
 
-vector<string> &MeterCommonImplementation::shellCmdlines()
+vector<string> &MeterCommonImplementation::shellCmdlinesMeterAdded()
 {
-    return shell_cmdlines_;
+    return shell_cmdlines_added_;
+}
+
+vector<string> &MeterCommonImplementation::shellCmdlinesMeterUpdated()
+{
+    return shell_cmdlines_updated_;
 }
 
 vector<string> &MeterCommonImplementation::meterExtraConstantFields()
@@ -737,7 +752,7 @@ string MeterCommonImplementation::datetimeOfUpdateHumanReadable()
 {
     char datetime[40];
     memset(datetime, 0, sizeof(datetime));
-    strftime(datetime, 20, "%Y-%m-%d %H:%M.%S", localtime(&datetime_of_update_));
+    strftime(datetime, 20, "%Y-%m-%d %H:%M:%S", localtime(&datetime_of_update_));
     return string(datetime);
 }
 
@@ -1664,6 +1679,26 @@ string FieldInfo::renderJson(Meter *m, DVEntry *dve)
     return s;
 }
 
+void MeterCommonImplementation::createMeterEnv( string *id,
+                                                vector<string> *envs,
+                                                vector<string> *extra_constant_fields)
+{
+    envs->push_back(string("METER_ID="+*id));
+    envs->push_back(string("METER_NAME=")+name());
+    envs->push_back(string("METER_TYPE=")+driverName().str());
+
+    // If the configuration has supplied json_address=Roodroad 123
+    // then the env variable METER_address will available and have the content "Roodroad 123"
+    for (string add_json : meterExtraConstantFields())
+    {
+        envs->push_back(string("METER_")+add_json);
+    }
+    for (string extra_field : *extra_constant_fields)
+    {
+        envs->push_back(string("METER_")+extra_field);
+    }
+}
+
 void MeterCommonImplementation::printMeter(Telegram *t,
                                            string *human_readable,
                                            string *fields, char separator,
@@ -1690,6 +1725,12 @@ void MeterCommonImplementation::printMeter(Telegram *t,
         media = mediaTypeJSON(t->dll_type, t->dll_mfct);
     }
 
+    string id = "";
+    if (t->ids.size() > 0)
+    {
+        id = t->ids.back();
+    }
+
     string indent = "";
     string newline = "";
 
@@ -1698,19 +1739,13 @@ void MeterCommonImplementation::printMeter(Telegram *t,
         indent = "    ";
         newline ="\n";
     }
+
     string s;
     s += "{"+newline;
     s += indent+"\"media\":\""+media+"\","+newline;
     s += indent+"\"meter\":\""+driverName().str()+"\","+newline;
     s += indent+"\"name\":\""+name()+"\","+newline;
-    if (t->ids.size() > 0)
-    {
-        s += indent+"\"id\":\""+t->ids.back()+"\","+newline;
-    }
-    else
-    {
-        s += indent+"\"id\":\"\","+newline;
-    }
+    s += indent+"\"id\":\""+id+"\","+newline;
 
     // Iterate over the meter field infos...
     map<FieldInfo*,set<DVEntry*>> founds; // Multiple dventries can match to a single field info.
@@ -1841,27 +1876,14 @@ void MeterCommonImplementation::printMeter(Telegram *t,
     s += "}";
     *json = s;
 
+    createMeterEnv(&id, envs, extra_constant_fields);
+
     envs->push_back(string("METER_JSON=")+*json);
-    if (t->ids.size() > 0)
-    {
-        envs->push_back(string("METER_ID=")+t->ids.back());
-    }
-    else
-    {
-        envs->push_back(string("METER_ID="));
-    }
-    envs->push_back(string("METER_NAME=")+name());
     envs->push_back(string("METER_MEDIA=")+media);
-    envs->push_back(string("METER_TYPE=")+driverName().str());
     envs->push_back(string("METER_TIMESTAMP=")+datetimeOfUpdateRobot());
     envs->push_back(string("METER_TIMESTAMP_UTC=")+datetimeOfUpdateRobot());
     envs->push_back(string("METER_TIMESTAMP_UT=")+unixTimestampOfUpdate());
     envs->push_back(string("METER_TIMESTAMP_LT=")+datetimeOfUpdateHumanReadable());
-    if (t->about.device != "")
-    {
-        envs->push_back(string("METER_DEVICE=")+t->about.device);
-        envs->push_back(string("METER_RSSI_DBM=")+to_string(t->about.rssi_dbm));
-    }
 
     for (FieldInfo& fi : field_infos_)
     {
@@ -1882,16 +1904,12 @@ void MeterCommonImplementation::printMeter(Telegram *t,
         }
     }
 
-    // If the configuration has supplied json_address=Roodroad 123
-    // then the env variable METER_address will available and have the content "Roodroad 123"
-    for (string add_json : meterExtraConstantFields())
+    if (t->about.device != "")
     {
-        envs->push_back(string("METER_")+add_json);
+        envs->push_back(string("METER_DEVICE=")+t->about.device);
+        envs->push_back(string("METER_RSSI_DBM=")+to_string(t->about.rssi_dbm));
     }
-    for (string extra_field : *extra_constant_fields)
-    {
-        envs->push_back(string("METER_")+extra_field);
-    }
+
 }
 
 void MeterCommonImplementation::setExpectedTPLSecurityMode(TPLSecurityMode tsm)
@@ -2473,6 +2491,8 @@ bool FieldInfo::extractString(Meter *m, Telegram *t, DVEntry *dve)
              matcher_.vif_range == VIFRange::FabricationNo ||
              matcher_.vif_range == VIFRange::HardwareVersion ||
              matcher_.vif_range == VIFRange::FirmwareVersion ||
+             matcher_.vif_range == VIFRange::Medium ||
+             matcher_.vif_range == VIFRange::Manufacturer ||
              matcher_.vif_range == VIFRange::ModelVersion ||
              matcher_.vif_range == VIFRange::SoftwareVersion ||
              matcher_.vif_range == VIFRange::Customer ||
@@ -2668,6 +2688,18 @@ void MeterCommonImplementation::addOptionalCommonFields(string field_names)
             );
     }
 
+    if (checkIf(fields,"manufacturer"))
+    {
+        addStringFieldWithExtractor(
+            "manufacturer",
+            "Meter manufacturer.",
+            DEFAULT_PRINT_PROPERTIES,
+            FieldMatcher::build()
+            .set(MeasurementType::Instantaneous)
+            .set(VIFRange::Manufacturer)
+            );
+    }
+
     if (checkIf(fields,"model_version"))
     {
         addStringFieldWithExtractor(
@@ -2677,6 +2709,18 @@ void MeterCommonImplementation::addOptionalCommonFields(string field_names)
             FieldMatcher::build()
             .set(MeasurementType::Instantaneous)
             .set(VIFRange::ModelVersion)
+            );
+    }
+
+    if (checkIf(fields,"firmware_version"))
+    {
+        addStringFieldWithExtractor(
+            "firmware_version",
+            "Meter firmware version.",
+            DEFAULT_PRINT_PROPERTIES,
+            FieldMatcher::build()
+            .set(MeasurementType::Instantaneous)
+            .set(VIFRange::FirmwareVersion)
             );
     }
 
@@ -3014,36 +3058,6 @@ VifScaling toVifScaling(const char *s)
     if (!strcmp(s, "AutoSigned")) return VifScaling::AutoSigned;
     if (!strcmp(s, "Unknown")) return VifScaling::Unknown;
     return VifScaling::Unknown;
-}
-
-FieldType toFieldType(const char *s)
-{
-    if (!strcmp(s, "NumericFieldWithExtractor")) return FieldType::NumericFieldWithExtractor;
-    if (!strcmp(s, "NumericFieldWithCalculator")) return FieldType::NumericFieldWithCalculator;
-    if (!strcmp(s, "NumericFieldWithCalculatorAndMatcher")) return FieldType::NumericFieldWithCalculatorAndMatcher;
-    if (!strcmp(s, "NumericField")) return FieldType::NumericField;
-
-    if (!strcmp(s, "StringFieldWithExtractor")) return FieldType::StringFieldWithExtractor;
-    if (!strcmp(s, "StringFieldWithExtractorAndLookup")) return FieldType::StringFieldWithExtractorAndLookup;
-    if (!strcmp(s, "StringField")) return FieldType::StringField;
-
-    return FieldType::Unknown;
-}
-
-const char *toString(FieldType ft)
-{
-    switch (ft) {
-    case FieldType::NumericFieldWithExtractor: return "NumericFieldWithExtractor";
-    case FieldType::NumericFieldWithCalculator: return "NumericFieldWithCalculator";
-    case FieldType::NumericFieldWithCalculatorAndMatcher: return "NumericFieldWithCalculatorAndMatcher";
-    case FieldType::NumericField: return "NumericField";
-    case FieldType::StringFieldWithExtractor: return "StringFieldWithExtractor";
-    case FieldType::StringFieldWithExtractorAndLookup: return "StringFieldWithExtractorAndLookup";
-    case FieldType::StringField: return "StringField";
-    case FieldType::Unknown: return "Unknown";
-    }
-
-    return "Unknown";
 }
 
 const char* toString(PrintProperty p)

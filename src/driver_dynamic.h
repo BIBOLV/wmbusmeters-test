@@ -23,10 +23,18 @@
 struct DriverDynamic : public virtual MeterCommonImplementation
 {
     DriverDynamic(MeterInfo &mi, DriverInfo &di);
+    ~DriverDynamic();
     static bool load(DriverInfo *di, const string &name);
-    static XMQProceed add_detect(XMQDoc *doc, XMQNode *detect, void *dd);
-    static XMQProceed add_field(XMQDoc *doc, XMQNode *field, void *dd);
-    static XMQProceed add_match(XMQDoc *doc, XMQNode *match, void *dd);
+    static XMQProceed add_detect(XMQDoc *doc, XMQNode *detect, DriverInfo *di);
+    static XMQProceed add_field(XMQDoc *doc, XMQNode *field, DriverDynamic *dd);
+    static XMQProceed add_match(XMQDoc *doc, XMQNode *match, DriverDynamic *dd);
+
+    const string &fileName() { return file_name_; }
+
+private:
+
+    string file_name_;
+    FieldMatcher *tmp_matcher_;
 };
 
 #endif

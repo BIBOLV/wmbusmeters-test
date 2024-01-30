@@ -1532,8 +1532,12 @@ bool Telegram::checkMAC(std::vector<uchar> &frame,
     debug("(wmbus) received   mac %s\n", received.c_str());
     string truncated = calculated.substr(0, received.length());
     bool ok = truncated == received;
-    if (ok) debug("(wmbus) mac ok!\n");
-    else {
+    if (ok)
+    {
+        debug("(wmbus) mac ok!\n");
+    }
+    else
+    {
         debug("(wmbus) mac NOT ok!\n");
         explainParse("BADMAC", 0);
     }
@@ -2648,6 +2652,9 @@ string vifType(int vif)
     case 0x7E: return "Any VIF";
     case 0x7F: return "Manufacturer specific";
 
+    case 0x7B00: return "Active Energy 0.1 MWh";
+    case 0x7B01: return "Active Energy 1 MWh";
+
     case 0x7B1A: return "Relative humidity 0.1%";
     case 0x7B1B: return "Relative humidity 1%";
 
@@ -2821,6 +2828,12 @@ double vifScale(int vif)
     case 0x75: return 60.0; // Actuality duration minutes
     case 0x76: return 1.0; // Actuality duration hours
     case 0x77: return (1.0/24.0); // Actuality duration days
+
+        // Active energy 0.1 or 1 MWh normalize to 100 KWh or 1000 KWh
+        // 7b00 33632 -> 3363.2 MWh -> 3363200 KWh
+        // 7b01 33632 -> 33632 MWh -> 33632000 KWh
+    case 0x7b00:
+    case 0x7b01: { double exp = (vif & 0x1)+2; return pow(10.0, -exp); }
 
         // relative humidity is a dimensionless value.
     case 0x7b1a: return 10.0; // Relative humidity 0.1 %
