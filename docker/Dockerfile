@@ -26,7 +26,7 @@ COPY --from=build /rtl_433/build/src/rtl_433 /usr/bin/rtl_433
 COPY --from=build /wmbusmeters/docker/docker-entrypoint.sh /wmbusmeters/docker-entrypoint.sh
 COPY --from=build /usr/local/bin/* /usr/local/bin/
 COPY --from=build /usr/local/lib/librtlsdr* /usr/local/lib/
-COPY --from=builder /etc/udev/rules.d/rtl-sdr.rules /etc/udev/rules.d/rtl-sdr.rules
+COPY --from=build /etc/udev/rules.d/rtl-sdr.rules /etc/udev/rules.d/rtl-sdr.rules
 RUN mkdir -p /etc/modprobe.d && \
     echo 'blacklist dvb_usb_rtl128xxu' >> /etc/modprobe.d/blacklist.conf
 VOLUME /wmbusmeters_data/
