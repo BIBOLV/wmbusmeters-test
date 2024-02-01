@@ -5,7 +5,9 @@ RUN git clone https://github.com/wmbusmeters/wmbusmeters.git && \
     git clone https://github.com/merbanan/rtl_433.git && \
     git clone https://github.com/osmocom/rtl-sdr.git
 WORKDIR /rtl-sdr
-RUN autoreconf -i && ./configure
+RUN mkdir build && \
+    cd build && \
+    cmake ../ -DDETACH_KERNEL_DRIVER=ON -DINSTALL_UDEV_RULES=ON
 RUN make && make install
 WORKDIR /wmbusmeters
 RUN make
