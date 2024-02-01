@@ -8,7 +8,7 @@ WORKDIR /rtl-sdr
 RUN mkdir build && \
     cd build && \
     cmake ../ -DDETACH_KERNEL_DRIVER=ON -DINSTALL_UDEV_RULES=ON
-RUN ./configure && make && make install
+RUN ls && make && make install
 WORKDIR /wmbusmeters
 RUN make
 WORKDIR /rtl-wmbus
