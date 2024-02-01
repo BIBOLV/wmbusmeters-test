@@ -1,5 +1,5 @@
 FROM asymworks/multiarch-alpine:${TARGETARCH}${TARGETVARIANT}-latest-stable AS build
-RUN apk add --no-cache alpine-sdk gcc linux-headers libxml2-dev cmake autoconf libusb-dev bash
+RUN apk add --no-cache alpine-sdk gcc linux-headers libxml2-dev cmake autoconf automake libusb-dev bash
 RUN git clone https://github.com/wmbusmeters/wmbusmeters.git && \
     git clone https://github.com/weetmuts/rtl-wmbus.git && \
     git clone https://github.com/merbanan/rtl_433.git && \
