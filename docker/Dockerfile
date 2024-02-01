@@ -3,9 +3,11 @@ RUN apk add --no-cache alpine-sdk gcc linux-headers libxml2-dev cmake libusb-dev
 RUN git clone https://github.com/wmbusmeters/wmbusmeters.git && \
     git clone https://github.com/weetmuts/rtl-wmbus.git && \
     git clone https://github.com/merbanan/rtl_433.git && \
-    git clone https://gitea.osmocom.org/sdr/rtl-sdr.git
+    git clone https://github.com/osmocom/rtl-sdr.git
 WORKDIR /rtl-sdr
-RUN cmake ../ -DDETACH_KERNEL_DRIVER=ON -DINSTALL_UDEV_RULES=ON
+RUN mkdir build && \
+    cd build && \
+    cmake ../ -DDETACH_KERNEL_DRIVER=ON -DINSTALL_UDEV_RULES=ON
 RUN make
 RUN make install
 WORKDIR /wmbusmeters
